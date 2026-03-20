@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Palette, Music, Image as ImageIcon, Users, MessageSquare, CalendarHeart, MapPin, Bell, Images, Wallet, BookOpen, Youtube, Share2, Shield, CheckCircle2, GripVertical, Play, Pause, VolumeX, Volume2, X, ChevronDown, Pencil, Trash2, RotateCw, RefreshCcw } from 'lucide-react';
+import { Palette, Music, Image as ImageIcon, Users, MessageSquare, CalendarHeart, MapPin, Bell, Images, Wallet, BookOpen, Youtube, Share2, Shield, CheckCircle2, GripVertical, Play, Pause, VolumeX, Volume2, X, ChevronDown, Pencil, Trash2, RotateCw, RefreshCcw, Move } from 'lucide-react';
 
 function AppLabel({
   className = '',
@@ -146,6 +146,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { useCardStore } from "../store/useCardStore";
+import { useSortable } from "@/lib/useSortable";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 declare global {
@@ -158,17 +159,24 @@ function NaverMapEmbed({
   lat,
   lon,
   className,
+  onAuthError,
+  onMapReady,
 }: {
   lat: number;
   lon: number;
   className?: string;
+  onAuthError?: () => void;
+  onMapReady?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const clientId = process.env.NEXT_PUBLIC_NAVER_MAPS_CLIENT_ID;
     if (!clientId) return;
+    setFailed(false);
+    setReady(false);
 
     if (window.naver?.maps) {
       setReady(true);
@@ -178,7 +186,15 @@ function NaverMapEmbed({
     const scriptId = "naver-maps-sdk";
     const existing = document.getElementById(scriptId) as HTMLScriptElement | null;
     if (existing) {
-      existing.addEventListener("load", () => setReady(true), { once: true });
+      const onLoad = () => {
+        if (window.naver?.maps) {
+          setReady(true);
+          return;
+        }
+        setFailed(true);
+        onAuthError?.();
+      };
+      existing.addEventListener("load", onLoad, { once: true });
       return;
     }
 
@@ -186,35 +202,61 @@ function NaverMapEmbed({
     s.id = scriptId;
     s.async = true;
     s.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${encodeURIComponent(clientId)}`;
-    s.addEventListener("load", () => setReady(true), { once: true });
+    s.addEventListener("load", () => {
+      if (window.naver?.maps) {
+        setReady(true);
+        return;
+      }
+      setFailed(true);
+      onAuthError?.();
+    }, { once: true });
+    s.addEventListener("error", () => {
+      setFailed(true);
+      onAuthError?.();
+    }, { once: true });
     document.head.appendChild(s);
-  }, []);
+  }, [onAuthError]);
 
   useEffect(() => {
     if (!ready) return;
     if (!containerRef.current) return;
     if (!window.naver?.maps) return;
+    try {
+      const center = new window.naver.maps.LatLng(lat, lon);
+      const map = new window.naver.maps.Map(containerRef.current, {
+        center,
+        zoom: 16,
+        scaleControl: false,
+        logoControl: false,
+        mapDataControl: false,
+        zoomControl: false,
+      });
+      new window.naver.maps.Marker({ position: center, map });
 
-    const center = new window.naver.maps.LatLng(lat, lon);
-    const map = new window.naver.maps.Map(containerRef.current, {
-      center,
-      zoom: 16,
-      scaleControl: false,
-      logoControl: false,
-      mapDataControl: false,
-      zoomControl: false,
-    });
-    new window.naver.maps.Marker({ position: center, map });
+      // SDK가 "인증 실패" 텍스트를 컨테이너에 렌더링하는 경우를 감지해 폴백 처리한다.
+      window.setTimeout(() => {
+        const text = containerRef.current?.textContent ?? "";
+        if (text.includes("Open API 인증이 실패")) {
+          setFailed(true);
+          onAuthError?.();
+          return;
+        }
+        onMapReady?.();
+      }, 0);
+    } catch {
+      setFailed(true);
+      onAuthError?.();
+    }
 
     return () => {
       // SDK가 제공하는 공식 destroy API가 명확치 않아, 언마운트 시 참조만 끊어줌
       // (컨테이너 DOM이 제거되면 내부 리스너도 함께 해제됨)
     };
-  }, [ready, lat, lon]);
+  }, [ready, lat, lon, onAuthError, onMapReady]);
 
   const hasKey = Boolean(process.env.NEXT_PUBLIC_NAVER_MAPS_CLIENT_ID);
 
-  if (!hasKey) return null;
+  if (!hasKey || failed) return null;
 
   return <div ref={containerRef} className={className} />;
 }
@@ -412,6 +454,232 @@ function parseKoreanTime(value: string | undefined | null) {
   return { period, hour, minute };
 }
 
+function MultiImageGrid({
+  images,
+  onReorder,
+  onSlotClick,
+  onEdit,
+  onDelete,
+}: {
+  images: string[];
+  onReorder: (next: string[]) => void;
+  onSlotClick: (index: number, hasImg: boolean) => void;
+  onEdit: (index: number, src: string) => void;
+  onDelete: (index: number) => void;
+}) {
+  const normalized = Array.from({ length: 4 }, (_, i) => images[i] || "");
+  const slots = normalized.map((src, i) => ({
+    id: src ? `img-${src}` : `empty-${i}`,
+    src,
+  }));
+
+  const sortable = useSortable({
+    items: slots,
+    onReorder: (reordered) => {
+      const next = reordered.map((s) => s.src);
+      onReorder(next);
+    },
+  });
+
+  return (
+    <div className="flex gap-2 flex-wrap w-full bg-[color:var(--surface-20)] p-4 rounded-lg">
+      {slots.map((slot, realIndex) => {
+        const hasImg = !!slot.src;
+        const { handleProps, wrapperProps } = sortable.getItemProps(slot.id);
+        return (
+          <div
+            key={slot.id}
+            {...wrapperProps}
+            className={`${wrapperProps.className} relative w-[100px] aspect-[9/16] group`}
+          >
+            <button
+              type="button"
+              className={[
+                "w-full h-full rounded-lg border bg-white flex items-center justify-center text-3xl text-on-surface-30 bg-center bg-cover bg-clip-border bg-origin-border",
+                hasImg ? "border-transparent" : "border-dashed border-border hover:bg-slate-50",
+              ].join(" ")}
+              style={hasImg ? { backgroundImage: `url(${slot.src})` } : undefined}
+              onClick={() => onSlotClick(realIndex, hasImg)}
+              aria-label={`이미지 ${realIndex + 1} 추가`}
+            >
+              {hasImg ? '' : '+'}
+            </button>
+            {hasImg && (
+              <div className="absolute right-1 top-1 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  type="button"
+                  className="w-7 h-7 rounded-lg bg-white/95 border border-border shadow-sm flex items-center justify-center text-on-surface-20 hover:bg-white"
+                  aria-label="이미지 수정"
+                  onClick={(e) => { e.stopPropagation(); onEdit(realIndex, slot.src); }}
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  className="w-7 h-7 rounded-lg bg-white/95 border border-border shadow-sm flex items-center justify-center text-on-surface-20 hover:bg-white"
+                  aria-label="이미지 삭제"
+                  onClick={(e) => { e.stopPropagation(); onDelete(realIndex); }}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  {...handleProps}
+                  className="w-7 h-7 rounded-lg bg-white/95 border border-border shadow-sm flex items-center justify-center text-on-surface-20 hover:bg-white cursor-grab active:cursor-grabbing"
+                  aria-label="이미지 이동"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Move className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function GalleryImageGrid({
+  images,
+  onChange,
+  onEdit,
+  imageRatio,
+  max = 50,
+}: {
+  images: string[];
+  onChange: (next: string[]) => void;
+  onEdit?: (index: number, src: string) => void;
+  imageRatio?: "square" | "portrait";
+  max?: number;
+}) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const normalized = images.slice(0, max);
+  const slots = normalized.map((src, i) => ({ id: src ? `g-${src}` : `empty-${i}`, src }));
+
+  const sortable = useSortable({
+    items: slots,
+    onReorder: (reordered) => onChange(reordered.map((x) => x.src)),
+  });
+  const thumbAspectClass = imageRatio === "square" ? "aspect-square" : "aspect-[9/16]";
+
+  return (
+    <div className="w-full flex flex-col gap-2">
+      <div className="pr-1">
+        <div className="flex gap-2 flex-wrap w-full bg-[color:var(--surface-20)] p-4 rounded-lg max-h-[420px] overflow-y-auto">
+          {slots.map((slot, i) => {
+            const { handleProps, wrapperProps } = sortable.getItemProps(slot.id);
+            return (
+              <div
+                key={`${slot.id}-${i}`}
+                {...wrapperProps}
+                className={`${wrapperProps.className} relative w-[100px] ${thumbAspectClass} group`}
+              >
+                <button
+                  type="button"
+                  className="w-full h-full rounded-lg border border-transparent bg-center bg-cover bg-clip-border bg-origin-border"
+                  style={{ backgroundImage: `url(${slot.src})` }}
+                  onClick={() => {
+                    const el = document.getElementById(`gallery-image-${i}`) as HTMLInputElement | null;
+                    el?.click();
+                  }}
+                  aria-label={`갤러리 이미지 ${i + 1} 수정`}
+                />
+                <div className="absolute right-1 top-1 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    type="button"
+                    className="w-7 h-7 rounded-lg bg-white/95 border border-border shadow-sm flex items-center justify-center text-on-surface-20 hover:bg-white"
+                    aria-label="이미지 수정"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onEdit && slot.src) {
+                        onEdit(i, slot.src);
+                        return;
+                      }
+                      const el = document.getElementById(`gallery-image-${i}`) as HTMLInputElement | null;
+                      el?.click();
+                    }}
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    className="w-7 h-7 rounded-lg bg-white/95 border border-border shadow-sm flex items-center justify-center text-on-surface-20 hover:bg-white"
+                    aria-label="이미지 삭제"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const next = [...normalized];
+                      next.splice(i, 1);
+                      onChange(next);
+                    }}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    {...handleProps}
+                    className="w-7 h-7 rounded-lg bg-white/95 border border-border shadow-sm flex items-center justify-center text-on-surface-20 hover:bg-white cursor-grab active:cursor-grabbing"
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="이미지 이동"
+                  >
+                    <Move className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+
+          {normalized.length < max && (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className={`relative w-[100px] ${thumbAspectClass} rounded-lg border border-dashed border-border bg-transparent hover:bg-transparent flex items-center justify-center text-3xl text-on-surface-30`}
+              aria-label="갤러리 이미지 추가"
+            >
+              +
+            </button>
+          )}
+        </div>
+      </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? []);
+          if (!files.length) return;
+          const next = [...normalized];
+          const remain = Math.max(0, max - next.length);
+          files.slice(0, remain).forEach((f) => next.push(URL.createObjectURL(f)));
+          onChange(next);
+          e.currentTarget.value = "";
+        }}
+      />
+
+      {slots.map((_, i) => (
+        <input
+          key={`gallery-image-input-${i}`}
+          id={`gallery-image-${i}`}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            const next = [...normalized];
+            next[i] = URL.createObjectURL(file);
+            onChange(next);
+            e.currentTarget.value = "";
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function BuilderPageClient({ initialParams, initialSearchParams }: any) {
   const [activeSection, setActiveSection] = useState(sidebarItems[0].id);
   const { data, updateData } = useCardStore();
@@ -426,8 +694,6 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   const editorResizeStartRef = useRef<{ x: number; width: number } | null>(null);
   const editorResizePointerIdRef = useRef<number | null>(null);
   const editorScrollRef = useRef<HTMLDivElement | null>(null);
-  // 드래그 중인/가이드 표시용 아이템 id
-  const [draggingId, setDraggingId] = useState<string | null>(null);
   // 선택사항 목록 순서 (드래그로 변경)
   const [optionalOrder, setOptionalOrder] = useState<string[]>(() =>
     sidebarItems.filter((i) => i.category === '선택').map((i) => i.id)
@@ -445,6 +711,11 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   const [locationSearchSelected, setLocationSearchSelected] = useState<string | null>(null);
   const [locationPreviewCoords, setLocationPreviewCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [locationPreviewLoading, setLocationPreviewLoading] = useState(false);
+  const [naverPreviewFailed, setNaverPreviewFailed] = useState(false);
+
+  useEffect(() => {
+    setNaverPreviewFailed(false);
+  }, [locationPreviewCoords?.lat, locationPreviewCoords?.lon]);
 
   const [mainPreviewIndex, setMainPreviewIndex] = useState(0);
   const [mainPreviewPrevIndex, setMainPreviewPrevIndex] = useState<number | null>(null);
@@ -463,7 +734,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   const [imageEditorRotation, setImageEditorRotation] = useState(0);
   const [imageEditorFlipX, setImageEditorFlipX] = useState(false);
   const [imageEditorPan, setImageEditorPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [imageEditorTarget, setImageEditorTarget] = useState<{ kind: 'single' } | { kind: 'multi'; index: number } | null>(null);
+  const [imageEditorAspect, setImageEditorAspect] = useState<'square' | 'portrait'>('portrait');
+  const [imageEditorTarget, setImageEditorTarget] = useState<{ kind: 'single' } | { kind: 'multi'; index: number } | { kind: 'gallery'; index: number } | null>(null);
   const imageEditorCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const imageEditorImageRef = useRef<HTMLImageElement | null>(null);
   const imageEditorZoomRef = useRef(1);
@@ -506,77 +778,171 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
     return {
       general: [
         {
-          title: '초대합니다',
-          content: `새로운 마음과 새 의미를 간직하며
-저희 두 사람이 새 출발의 첫 걸음을 내딛습니다.
-좋은 꿈, 바른 뜻으로 올바르게 살 수 있도록
-축복과 격려주시면
-더없는 기쁨으로 간직하겠습니다.`,
+          title: '새 마음의 초대',
+          content: `새로운 마음을 담아 초대드립니다.
+두 사람이 한 가정의 첫 걸음을 내딛는 이 날,
+귀한 분들의 축복과 격려를 부탁드립니다.
+함께해 주시면 평생 간직하겠습니다.`,
         },
         {
-          title: '초대합니다',
-          content: `두 사람이 사랑으로 만나
-진실과 이해로써 하나를 이루려 합니다.
-이 두 사람을 지성으로 아끼고 돌봐주신
-여러 어른과 친지를 모시고 서약을 맺고자 하오니
-바쁘신 가운데 두 사람의 장래를
-가까이에서 축복해 주시면 고맙겠습니다.`,
+          title: '사랑과 존중의 약속',
+          content: `사랑으로 만나 서로를 존중하며 더 단단한 믿음으로 살아가려 합니다.
+이 자리에서 마음을 나눌 수 있도록 오셔서 축하해 주세요.`,
         },
         {
-          title: '초대합니다',
-          content: `다른 공간, 다른 시간을 걷던 두 사람이
-서로를 마주한 이후
-같은 공간, 같은 시간을 꿈꾸며
-걷게 되었습니다.
-소박하지만 단단하고 따뜻한
-믿음의 가정을 이루겠습니다.
-오셔서 첫 날의 기쁨과 설렘을
-함께 해 주시고 축복해 주세요.`,
+          title: '설렘이 닿는 자리',
+          content: `오늘의 설렘이 내일의 기쁨이 되도록,
+두 사람은 같은 방향을 바라보며 준비했습니다.
+바쁘시더라도 귀한 걸음으로 함께해 주시면 감사하겠습니다.`,
         },
         {
-          title: '초대합니다',
-          content: `모든 것이 새로워지는 봄날,
-사랑하는 두 사람이 새 인생을 시작하려 합니다.
-귀한 걸음으로 두 사람의 결혼을 축복해 주시고
-따뜻한 마음으로 격려해 주신다면
-큰 힘이 되겠습니다.`,
+          title: '새 출발의 다짐',
+          content: `마음이 닿은 두 사람이 새 출발을 준비하고 있습니다.
+서로를 따뜻하게 지켜주며 살겠습니다.
+오셔서 축복해 주세요.`,
         },
         {
-          title: '초대합니다',
-          content: `살랑이는 바람결에
-사랑이 묻어나는 계절입니다.
-여기 곱고 예쁜 두 사람이 사랑을 맺어
-인생의 반려자가 되려 합니다.
-새 인생을 시작하는 이 자리에 오셔서
-축복해 주시면 감사하겠습니다.`,
+          title: '행복을 모아',
+          content: `작은 행복을 모아 서로의 곁을 지켜온 시간처럼,
+앞으로도 사랑과 배려로 함께하겠습니다.
+귀한 분들과 함께하는 이날을 기다립니다.`,
+        },
+        {
+          title: '봄처럼 시작하는 마음',
+          content: `봄의 향기처럼 새로운 출발의 마음을 전합니다.
+서로에게 든든한 울타리가 되겠습니다.
+따뜻한 축복을 부탁드립니다.`,
+        },
+        {
+          title: '서로를 잇는 사랑',
+          content: `서로 다른 삶이 만나 같은 꿈을 꾸게 되었습니다.
+사랑으로 함께하며 좋은 사람이 되겠습니다.
+이 날 함께 웃어주시면 더없이 기쁩니다.`,
+        },
+        {
+          title: '기쁨으로 맞이하는 결혼',
+          content: `두 사람의 결혼을 기쁨으로 맞이하며,
+여러분의 축복을 부탁드립니다.
+항상 겸손하고 성실한 마음으로 가정을 지켜나가겠습니다.`,
+        },
+        {
+          title: '함께 걷는 가정의 약속',
+          content: `서로를 더 깊이 이해하며 함께 걸어갈 가정을 약속합니다.
+귀한 걸음으로 이 자리를 빛내 주시면 감사하겠습니다.`,
+        },
+        {
+          title: '평생 잊지 않겠습니다',
+          content: `새로운 길 위에서 서로를 바라보는 마음으로 가정을 이루겠습니다.
+축하해 주신 마음은 평생 잊지 않겠습니다.`,
         },
       ],
       hosts: [
         {
-          title: '혼주 인사',
-          content: `양가 부모님을 대신하여 인사드립니다.
-귀한 걸음으로 축복해 주시는 마음 깊이 감사드리며,
-두 사람의 앞날을 따뜻하게 지켜봐 주시기 바랍니다.`,
+          title: '부모님 인사',
+          content: `양가 부모님을 대표하여 인사드립니다.
+두 사람이 가정을 이루게 되어 기쁨이 큽니다.
+바쁘시더라도 참석하시어 축복과 격려로 함께해 주시면 감사하겠습니다.`,
         },
         {
-          title: '혼주 인사',
-          content: `부모님의 사랑과 보살핌으로
-두 사람이 한 가정을 이루게 되었습니다.
-오셔서 축복해 주시면 감사하겠습니다.`,
+          title: '출발을 응원합니다',
+          content: `부모로서 지켜온 마음을 담아 이제 새 보금자리로 보내려 합니다.
+두 사람의 출발에 힘이 될 수 있도록 따뜻한 말씀 부탁드립니다.`,
+        },
+        {
+          title: '가정의 약속',
+          content: `어느새 사랑이 가정의 약속이 되었습니다.
+양가 부모님은 귀한 분들을 모시고 함께 축하하고자 합니다.
+많은 축복 부탁드립니다.`,
+        },
+        {
+          title: '성실한 삶을 약속',
+          content: `그동안 베풀어주신 사랑에 보답하고자 두 사람은 성실한 가정을 약속합니다.
+부디 오셔서 축복해 주시면 부모된 마음으로도 더없이 기쁘겠습니다.`,
+        },
+        {
+          title: '앞날을 기도합니다',
+          content: `부모의 마음으로 두 사람의 앞날을 기도합니다.
+이 기쁜 날 함께해 주셔서 격려와 축복을 나눠 주시면 감사하겠습니다.`,
+        },
+        {
+          title: '따뜻한 축복을 부탁드립니다',
+          content: `준비한 마음을 담아 인사드립니다.
+오늘의 시작이 더 밝아질 수 있도록 귀한 분들의 축복을 부탁드립니다.`,
+        },
+        {
+          title: '양가 부모님 마음',
+          content: `가족이 된다는 약속의 자리에서 마음을 전합니다.
+양가 부모님을 대신해 인사드립니다.
+오셔서 따뜻한 축복 부탁드립니다.`,
+        },
+        {
+          title: '조언과 축복을 부탁드립니다',
+          content: `두 사람이 한 가정을 이루어 서로를 살피며 살아갈 수 있도록
+어른들의 조언과 축복을 부탁드립니다.
+이 날 함께해 주시면 감사하겠습니다.`,
+        },
+        {
+          title: '기쁨을 오래도록',
+          content: `오늘의 기쁨이 오래도록 이어지도록 마음을 모아 축복의 인사를 드립니다.
+귀한 걸음으로 함께해 주시면 영광이겠습니다.`,
+        },
+        {
+          title: '진심으로 감사드립니다',
+          content: `그동안 곁에서 응원해 주신 모든 분들께 진심으로 감사드립니다.
+두 사람의 시작을 축하해 주시고 앞으로도 따뜻한 관심 부탁드립니다.`,
         },
       ],
       religion: [
         {
-          title: '초대합니다',
-          content: `하나님의 은혜 안에서
-두 사람이 믿음의 가정을 이루려 합니다.
-기도와 축복으로 함께해 주시면 감사하겠습니다.`,
+          title: '하나님의 은혜',
+          content: `하나님의 은혜로 두 사람이 만나 새 가정을 이루려 합니다.
+이 시작을 함께 기뻐해 주시고 기도로 축복해 주시면 감사하겠습니다.`,
         },
         {
-          title: '초대합니다',
-          content: `주님의 사랑 안에서
-서로를 아끼고 존중하며 살아가겠습니다.
-귀한 발걸음과 기도로 함께해 주세요.`,
+          title: '주님의 사랑으로 세우는 가정',
+          content: `주님의 사랑 안에서 서로를 섬기며 살아갈 가정을 세우고자 합니다.
+바쁘시더라도 함께해 주셔서 축복과 기도 부탁드립니다.`,
+        },
+        {
+          title: '계획하심을 믿으며',
+          content: `하나님의 계획하심 안에서 두 사람은 평생을 함께 걸어가려 합니다.
+귀한 발걸음으로 이 자리를 빛내 주시면 더없는 기쁨이 되겠습니다.`,
+        },
+        {
+          title: '기도하는 마음으로',
+          content: `기도하는 마음으로 준비한 자리입니다.
+두 사람의 믿음 위에 가정의 기쁨이 더해지도록 함께 축하해 주세요.`,
+        },
+        {
+          title: '사랑과 존중의 약속',
+          content: `서로를 존중하고 사랑으로 섬기며 주님의 뜻 안에서 가정을 이루겠습니다.
+부디 오셔서 기도와 축복을 나눠 주시기 바랍니다.`,
+        },
+        {
+          title: '감사로 채워가는 결혼',
+          content: `오늘의 결혼을 통해 하나님의 선하심을 기억하며 늘 감사하는 삶을 약속드립니다.
+귀한 분들을 모시고자 합니다.`,
+        },
+        {
+          title: '새 출발의 은혜',
+          content: `주님의 은혜 아래 두 사람이 새로운 마음으로 출발합니다.
+함께해 주셔서 따뜻한 축복과 격려의 말씀 부탁드립니다.`,
+        },
+        {
+          title: '사랑과 믿음으로 하나',
+          content: `사랑과 믿음으로 하나 되는 날,
+함께 기도해 주시면 감사하겠습니다.
+이 자리에서 주님의 평안이 두 사람의 가정에 머물길 바랍니다.`,
+        },
+        {
+          title: '함께하시는 하나님',
+          content: `하나님께서 함께하심을 믿으며 가정의 기쁨을 열어가겠습니다.
+부디 오셔서 축하해 주시고 기도로 지켜봐 주시면 고맙겠습니다.`,
+        },
+        {
+          title: '주님께 맡기는 가정',
+          content: `두 사람의 앞날을 주님의 손에 맡기며 늘 기쁨으로 섬기는 가정을 이루겠습니다.
+축하와 기도로 함께해 주세요.`,
         },
       ],
     } as const;
@@ -819,16 +1185,6 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
     requestAnimationFrame(() => drawImageEditor());
   }, [imageEditorOpen, imageEditorZoom, imageEditorRotation, imageEditorFlipX, imageEditorPan, drawImageEditor]);
 
-  useEffect(() => {
-    if (!draggingId) return;
-    const handleUp = () => setDraggingId(null);
-    document.addEventListener('pointerup', handleUp);
-    document.body.style.userSelect = 'none';
-    return () => {
-      document.removeEventListener('pointerup', handleUp);
-      document.body.style.userSelect = '';
-    };
-  }, [draggingId]);
 
   useEffect(() => {
     const query = ((data.location.address || '').trim() || '경복궁').trim();
@@ -958,15 +1314,10 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
     .filter(Boolean) as typeof sidebarItems;
   const orderedItems = [...requiredItems, ...orderedOptionalItems];
 
-  const handleOptionalReorder = (draggedId: string, targetId: string) => {
-    const from = optionalOrder.indexOf(draggedId);
-    const to = optionalOrder.indexOf(targetId);
-    if (from === -1 || to === -1 || from === to) return;
-    const next = [...optionalOrder];
-    next.splice(from, 1);
-    next.splice(to, 0, draggedId);
-    setOptionalOrder(next);
-  };
+  const sidebarSortable = useSortable({
+    items: orderedOptionalItems.map((it) => ({ ...it, id: it.id })),
+    onReorder: (reordered) => setOptionalOrder(reordered.map((x) => x.id)),
+  });
 
   const scrollToSection = (id: string) => {
     setActiveSection(id);
@@ -984,7 +1335,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
     container.scrollTo({ top: nextTop, behavior: 'smooth' });
   };
 
-  const openImageEditor = (target: { kind: 'single' } | { kind: 'multi'; index: number }, src: string) => {
+  const openImageEditor = (target: { kind: 'single' } | { kind: 'multi'; index: number } | { kind: 'gallery'; index: number }, src: string) => {
     if (!src) return;
     setImageEditorTarget(target);
     setImageEditorSrc(src);
@@ -992,6 +1343,12 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
     setImageEditorRotation(0);
     setImageEditorFlipX(false);
     setImageEditorPan({ x: 0, y: 0 });
+    if (target.kind === 'gallery') {
+      const ratio = ((data.gallery as any)?.imageRatio ?? 'portrait') as string;
+      setImageEditorAspect(ratio === 'square' ? 'square' : 'portrait');
+    } else {
+      setImageEditorAspect('portrait');
+    }
     setImageEditorOpen(true);
   };
 
@@ -999,6 +1356,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
     setImageEditorOpen(false);
     setImageEditorTarget(null);
     setImageEditorSrc('');
+    setImageEditorAspect('portrait');
   };
 
   const saveImageEditor = async () => {
@@ -1006,7 +1364,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
     if (!canvas || !imageEditorTarget) return;
 
     const cropH = canvas.height;
-    const cropW = Math.round(cropH * (9 / 16));
+    const cropRatio = imageEditorAspect === 'square' ? 1 : (9 / 16);
+    const cropW = Math.round(cropH * cropRatio);
     const offsetX = Math.round((canvas.width - cropW) / 2);
 
     const cropCanvas = document.createElement('canvas');
@@ -1026,7 +1385,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
       }
       mainImageObjectUrlRef.current = url;
       updateData('main.image', url);
-    } else {
+    } else if (imageEditorTarget.kind === 'multi') {
       const prev = Array.isArray((data.main as any).images) ? [...(data.main as any).images] : [];
       // 기존 blob url이면 정리
       const prevUrl = prev[imageEditorTarget.index];
@@ -1035,6 +1394,14 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
       }
       prev[imageEditorTarget.index] = url;
       updateData('main.images', prev);
+    } else {
+      const prev = Array.isArray((data.gallery as any).images) ? [...(data.gallery as any).images] : [];
+      const prevUrl = prev[imageEditorTarget.index];
+      if (typeof prevUrl === 'string' && prevUrl.startsWith('blob:')) {
+        try { URL.revokeObjectURL(prevUrl); } catch {}
+      }
+      prev[imageEditorTarget.index] = url;
+      updateData('gallery.images', prev);
     }
 
     closeImageEditor();
@@ -1165,9 +1532,9 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           <>
             {parent.isDeceased && (
               <img
-                src="/deceased-flower-24.svg"
+                src="/gukhwa.svg"
                 alt=""
-                className="inline-block w-6 h-6 align-middle mr-1"
+                className="inline-block w-5 h-5 align-middle mr-1"
               />
             )}
             <span className="align-middle">{parent.name || fallback}</span>
@@ -1283,8 +1650,10 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                           lat={locationPreviewCoords.lat}
                           lon={locationPreviewCoords.lon}
                           className="absolute inset-0 w-full h-full"
+                          onAuthError={() => setNaverPreviewFailed(true)}
+                          onMapReady={() => setNaverPreviewFailed(false)}
                         />
-                        {!process.env.NEXT_PUBLIC_NAVER_MAPS_CLIENT_ID && (
+                        {(!process.env.NEXT_PUBLIC_NAVER_MAPS_CLIENT_ID || naverPreviewFailed) && (
                           <img
                             alt="지도 미리보기"
                             className="absolute inset-0 w-full h-full object-cover"
@@ -1413,29 +1782,18 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
             {orderedOptionalItems.map((item) => {
               const isActive = activeSection === item.id;
               const isDisabled = item.hasSwitch && !(sectionEnabled[item.id] ?? false);
-              const isDragging = draggingId === item.id;
+              const { handleProps, wrapperProps, isDragging } = sidebarSortable.getItemProps(item.id);
               return (
                 <div
                   key={item.id}
-                  onPointerDown={(e) => {
-                    e.preventDefault();
-                    setDraggingId(item.id);
-                  }}
-                  onPointerEnter={() => {
-                    if (draggingId && draggingId !== item.id) {
-                      handleOptionalReorder(draggingId, item.id);
-                    }
-                  }}
-                  onClick={() => { if (!draggingId) scrollToSection(item.id); }}
-                  className={`flex flex-col items-center justify-center gap-y-1 w-[80px] h-[64px] rounded-lg transition-all duration-150 shadow-none cursor-grab active:cursor-grabbing ${
+                  {...wrapperProps}
+                  className={`${wrapperProps.className} flex flex-col items-center justify-center gap-y-1 w-[80px] h-[64px] rounded-lg shadow-none cursor-grab active:cursor-grabbing ${
                     isDisabled
                       ? 'opacity-50 text-on-surface-30 hover:bg-slate-100'
                       : `${isActive ? 'bg-slate-100' : 'text-on-surface-20 hover:bg-slate-100'}`
-                  } ${
-                    isDragging
-                      ? 'bg-slate-200 ring-2 ring-[color:var(--key)]/30 scale-105'
-                      : ''
                   }`}
+                  {...handleProps}
+                  onClick={() => { if (!isDragging) scrollToSection(item.id); }}
                 >
                   <item.icon className={`w-6 h-6 ${isDisabled ? 'text-on-surface-30' : isActive ? 'text-[color:var(--key)]' : 'text-on-surface-30'}`} strokeWidth={1.5} />
                   <span className={`text-[12px] font-normal ${isDisabled ? 'text-on-surface-30' : isActive ? 'text-[color:var(--key)]' : 'text-on-surface-20'}`}>{item.label}</span>
@@ -1457,7 +1815,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                 const isInitiallyExpanded = true;
                 const isOptional = item.category === '선택';
                 const isFirstOptional = isOptional && !orderedItems[idx - 1] || (isOptional && orderedItems[idx - 1]?.category !== '선택');
-                const isDragging = draggingId === item.id;
+                const editorSortProps = isOptional ? sidebarSortable.getItemProps(item.id) : null;
+                const isDragging = editorSortProps?.isDragging ?? false;
                 return (
                   <React.Fragment key={item.id}>
                 {isFirstOptional && (
@@ -1465,19 +1824,15 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                 )}
                 <div
                   id={item.id}
-                  className={`scroll-mt-6 border rounded-xl overflow-hidden bg-white transition-all duration-150 ${
+                  className={`scroll-mt-6 border rounded-xl overflow-hidden bg-white transition-all duration-200 ease-out ${
                     item.id === 'main' ? 'mb-0' : ''
                   } ${
                     isDragging
-                      ? 'border-[color:var(--key)] ring-2 ring-[color:var(--key)]/20 shadow-lg scale-[1.01] z-10 relative'
+                      ? 'border-[color:var(--key)] ring-2 ring-[color:var(--key)]/20 shadow-lg scale-[1.01] opacity-60 z-10 relative'
                       : 'border-border'
                   }`}
                   onFocusCapture={() => setActiveSection(item.id)}
-                  onPointerEnter={() => {
-                    if (draggingId && draggingId !== item.id && isOptional) {
-                      handleOptionalReorder(draggingId, item.id);
-                    }
-                  }}
+                  onPointerEnter={() => editorSortProps?.wrapperProps.onPointerEnter()}
                 >
                   <div
                     className="h-14 py-5 pl-5 pr-3 flex items-center justify-between bg-[color:var(--surface-1)] hover:bg-[color:var(--surface-1)] cursor-pointer"
@@ -1495,16 +1850,12 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                         />
                       )}
                     </div>
-                    {isOptional && (
+                    {isOptional && editorSortProps && (
                       <button
                         type="button"
-                        onPointerDown={(e) => {
-                          e.preventDefault();
-                          setDraggingId(item.id);
-                        }}
+                        {...editorSortProps.handleProps}
                         className="flex-shrink-0 inline-flex items-center justify-center p-1 rounded hover:bg-slate-200/80 text-on-surface-30 hover:text-on-surface-20 active:text-on-surface-10 cursor-grab active:cursor-grabbing touch-none"
                         onClick={(e) => e.stopPropagation()}
-                        aria-label="드래그하여 순서 변경"
                       >
                         <GripVertical className="w-5 h-5 text-on-surface-disabled" strokeWidth={1.5} />
                       </button>
@@ -1618,25 +1969,17 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
 
                           {/* 스크롤 등장 효과 */}
                           <FormItem label="스크롤효과">
-                            <div className="flex items-center gap-6">
-                              <button
-                                type="button"
+                            <div className="flex flex-wrap gap-2">
+                              <OptionChip
+                                label="켜짐"
+                                active={!!data.theme.scrollEffect}
                                 onClick={() => updateData('theme.scrollEffect', true)}
-                                className="inline-flex items-center gap-2 text-[13px] text-on-surface-20"
-                                aria-pressed={!!data.theme.scrollEffect}
-                              >
-                                <CircleRadio checked={!!data.theme.scrollEffect} onChange={() => {}} />
-                                켜짐
-                              </button>
-                              <button
-                                type="button"
+                              />
+                              <OptionChip
+                                label="꺼짐"
+                                active={!data.theme.scrollEffect}
                                 onClick={() => updateData('theme.scrollEffect', false)}
-                                className="inline-flex items-center gap-2 text-[13px] text-on-surface-20"
-                                aria-pressed={!data.theme.scrollEffect}
-                              >
-                                <CircleRadio checked={!data.theme.scrollEffect} onChange={() => {}} />
-                                꺼짐
-                              </button>
+                              />
                             </div>
                           </FormItem>
                         </>
@@ -1660,26 +2003,18 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
 
                           <div className="border-t border-dashed border-[color:var(--border-20)]" />
 
-                          <FormItem label="옵션">
-                            <div className="flex items-center gap-6">
-                              <button
-                                type="button"
+                          <FormItem label="사진타입">
+                            <div className="flex flex-wrap gap-2">
+                              <OptionChip
+                                label="단일 이미지"
+                                active={((data.main as any).imageMode ?? 'single') === 'single'}
                                 onClick={() => updateData('main.imageMode', 'single')}
-                                className="inline-flex items-center gap-2 text-[13px] text-on-surface-20"
-                                aria-pressed={((data.main as any).imageMode ?? 'single') === 'single'}
-                              >
-                                <CircleRadio checked={((data.main as any).imageMode ?? 'single') === 'single'} onChange={() => {}} />
-                                단일 이미지
-                              </button>
-                              <button
-                                type="button"
+                              />
+                              <OptionChip
+                                label="다중 이미지 전환"
+                                active={((data.main as any).imageMode ?? 'single') === 'multi'}
                                 onClick={() => updateData('main.imageMode', 'multi')}
-                                className="inline-flex items-center gap-2 text-[13px] text-on-surface-20"
-                                aria-pressed={((data.main as any).imageMode ?? 'single') === 'multi'}
-                              >
-                                <CircleRadio checked={((data.main as any).imageMode ?? 'single') === 'multi'} onChange={() => {}} />
-                                다중 이미지 전환
-                              </button>
+                              />
                             </div>
                           </FormItem>
 
@@ -1756,66 +2091,21 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                                 </div>
                               ) : (
                                 <>
-                                  <div className="flex gap-3 flex-wrap w-full">
-                                    {Array.from({ length: 4 }).map((_, i) => (
-                                      <div key={i} className="relative w-[120px] aspect-[9/16] group">
-                                        <button
-                                          type="button"
-                                          className={[
-                                            "w-full h-full rounded-lg border bg-white flex items-center justify-center text-3xl text-on-surface-30 bg-center bg-cover bg-clip-border bg-origin-border",
-                                            Array.isArray((data.main as any).images) && (data.main as any).images[i]
-                                              ? "border-transparent"
-                                              : "border-dashed border-border hover:bg-slate-50",
-                                          ].join(" ")}
-                                          style={
-                                            Array.isArray((data.main as any).images) && (data.main as any).images[i]
-                                              ? { backgroundImage: `url(${(data.main as any).images[i]})` }
-                                              : undefined
-                                          }
-                                          onClick={() => {
-                                            // 빈 슬롯 클릭 시 한 번에 여러 장 추가 허용
-                                            if (!(Array.isArray((data.main as any).images) && (data.main as any).images[i])) {
-                                              mainMultiBatchInputRef.current?.click();
-                                              return;
-                                            }
-                                            const el = document.getElementById(`main-multi-image-${i}`) as HTMLInputElement | null;
-                                            el?.click();
-                                          }}
-                                          aria-label={`이미지 ${i + 1} 추가`}
-                                        >
-                                          {Array.isArray((data.main as any).images) && (data.main as any).images[i] ? '' : '+'}
-                                        </button>
-                                        {!!(Array.isArray((data.main as any).images) && (data.main as any).images[i]) && (
-                                          <div className="absolute right-2 top-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button
-                                              type="button"
-                                              className="w-8 h-8 rounded-lg bg-white/95 border border-border shadow-sm flex items-center justify-center text-on-surface-20 hover:bg-white"
-                                              aria-label="이미지 수정"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                openImageEditor({ kind: 'multi', index: i }, (data.main as any).images[i]);
-                                              }}
-                                            >
-                                              <Pencil className="w-4 h-4" />
-                                            </button>
-                                            <button
-                                              type="button"
-                                              className="w-8 h-8 rounded-lg bg-white/95 border border-border shadow-sm flex items-center justify-center text-on-surface-20 hover:bg-white"
-                                              aria-label="이미지 삭제"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                const next = Array.isArray((data.main as any).images) ? [...(data.main as any).images] : [];
-                                                next[i] = '';
-                                                updateData('main.images', next);
-                                              }}
-                                            >
-                                              <Trash2 className="w-4 h-4" />
-                                            </button>
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
+                                  <MultiImageGrid
+                                    images={Array.isArray((data.main as any).images) ? (data.main as any).images : []}
+                                    onReorder={(next) => updateData('main.images', next)}
+                                    onSlotClick={(i, hasImg) => {
+                                      if (!hasImg) { mainMultiBatchInputRef.current?.click(); return; }
+                                      const el = document.getElementById(`main-multi-image-${i}`) as HTMLInputElement | null;
+                                      el?.click();
+                                    }}
+                                    onEdit={(i, src) => openImageEditor({ kind: 'multi', index: i }, src)}
+                                    onDelete={(i) => {
+                                      const next = Array.isArray((data.main as any).images) ? [...(data.main as any).images] : [];
+                                      next[i] = '';
+                                      updateData('main.images', next);
+                                    }}
+                                  />
                                   <div className="text-[12px] text-on-surface-30">* 이미지를 한 번에 최대 4장까지 선택해서 추가할 수 있어요.</div>
                                   <input
                                     ref={mainMultiBatchInputRef}
@@ -2148,7 +2438,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
 
                           {/* Upload */}
                           <FormItem label={data.music?.uploadedFile ? "나의 음원" : "파일 첨부"}>
-                            <div className="flex flex-col gap-2 w-full">
+                            <div className="flex flex-col gap-1 w-full">
                               <input
                                 ref={fileInputRef}
                                 type="file"
@@ -2644,10 +2934,21 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                                   </div>
                                 </div>
 
-                                <div className="pt-0 flex justify-end">
+                                <div className="pt-0 flex justify-end gap-2">
                                   <Button
                                     type="button"
-                                    className="w-fit h-11 px-5 rounded-lg text-[14px] font-semibold"
+                                    variant="outline"
+                                    className="w-fit h-10 px-5 rounded-lg text-[14px] font-semibold border-[color:var(--border-30)] bg-white text-on-surface-20 hover:bg-slate-50 hover:text-on-surface-10"
+                                    onClick={() => {
+                                      setGreetingSelectedSample(null);
+                                      setGreetingSampleOpen(false);
+                                    }}
+                                  >
+                                    취소
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    className="w-fit h-10 px-5 rounded-lg text-[14px] font-semibold"
                                     disabled={!greetingSelectedSample}
                                     onClick={() => {
                                       if (!greetingSelectedSample) return;
@@ -2703,39 +3004,17 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                             </FormItem>
 
                             <FormItem label="지도타입">
-                              <div className="flex items-center gap-6 w-full">
-                              <span
-                                role="button"
-                                tabIndex={0}
-                                className="inline-flex items-center gap-2 text-[13px] text-on-surface-20 select-none cursor-pointer"
-                                onClick={() => updateData('location.mapType', 'photo')}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter' || e.key === ' ') updateData('location.mapType', 'photo');
-                                }}
-                              >
-                                <CircleRadio
-                                  name="location-map-type"
-                                  checked={(((data.location as any).mapType ?? 'photo') === 'photo')}
-                                  onChange={() => updateData('location.mapType', 'photo')}
+                              <div className="flex flex-wrap gap-2 w-full">
+                                <OptionChip
+                                  label="실사"
+                                  active={(((data.location as any).mapType ?? 'photo') === 'photo')}
+                                  onClick={() => updateData('location.mapType', 'photo')}
                                 />
-                                실사
-                              </span>
-                              <span
-                                role="button"
-                                tabIndex={0}
-                                className="inline-flex items-center gap-2 text-[13px] text-on-surface-20 select-none cursor-pointer"
-                                onClick={() => updateData('location.mapType', '2d')}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter' || e.key === ' ') updateData('location.mapType', '2d');
-                                }}
-                              >
-                                <CircleRadio
-                                  name="location-map-type"
-                                  checked={(((data.location as any).mapType ?? 'photo') === '2d')}
-                                  onChange={() => updateData('location.mapType', '2d')}
+                                <OptionChip
+                                  label="2D"
+                                  active={(((data.location as any).mapType ?? 'photo') === '2d')}
+                                  onClick={() => updateData('location.mapType', '2d')}
                                 />
-                                2D
-                              </span>
                               </div>
                             </FormItem>
 
@@ -3083,8 +3362,75 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                         </>
                       )}
 
+                      {/* 갤러리 섹션 */}
+                      {item.id === 'gallery' && (
+                        <>
+                          <FormItem label="갤러리 타입">
+                            <div className="flex flex-wrap gap-2">
+                              {([
+                                { value: 'grid', label: '그리드' },
+                                { value: 'slide', label: '슬라이드' },
+                              ] as const).map((opt) => (
+                                <OptionChip
+                                  key={opt.value}
+                                  label={opt.label}
+                                  active={(((data.gallery as any).layoutType ?? 'grid') === opt.value)}
+                                  onClick={() => updateData('gallery.layoutType', opt.value)}
+                                />
+                              ))}
+                            </div>
+                          </FormItem>
+
+                          {(((data.gallery as any).layoutType ?? 'grid') === 'grid') && (
+                            <FormItem label="배치 방법">
+                              <div className="flex flex-wrap gap-2">
+                                {([2, 3, 4] as const).map((col) => (
+                                  <OptionChip
+                                    key={col}
+                                    label={`${col}단 그리드`}
+                                    active={Number(((data.gallery as any).gridColumns ?? 4)) === col}
+                                    onClick={() => updateData('gallery.gridColumns', col)}
+                                  />
+                                ))}
+                              </div>
+                            </FormItem>
+                          )}
+
+                          <FormItem label="사진 비율">
+                            <div className="flex flex-wrap gap-2">
+                              {([
+                                { value: 'square', label: '정사각형' },
+                                { value: 'portrait', label: '직사각형' },
+                              ] as const).map((opt) => (
+                                <OptionChip
+                                  key={opt.value}
+                                  label={opt.label}
+                                  active={(((data.gallery as any).imageRatio ?? 'portrait') === opt.value)}
+                                  onClick={() => updateData('gallery.imageRatio', opt.value)}
+                                />
+                              ))}
+                            </div>
+                          </FormItem>
+
+                          <FormItem label={`사진 ${Array.isArray((data.gallery as any).images) ? (data.gallery as any).images.length : 0}/50`}>
+                            <div className="flex-1 flex flex-col gap-2 w-full">
+                              <GalleryImageGrid
+                                images={Array.isArray((data.gallery as any).images) ? (data.gallery as any).images : []}
+                                onChange={(next) => updateData('gallery.images', next)}
+                                onEdit={(i, src) => openImageEditor({ kind: 'gallery', index: i }, src)}
+                                imageRatio={((data.gallery as any).imageRatio ?? 'portrait') as 'square' | 'portrait'}
+                                max={50}
+                              />
+                              <div className="text-[12px] text-on-surface-30">
+                                * 이미지를 한 번에 최대 50장까지 선택해서 추가할 수 있어요.
+                              </div>
+                            </div>
+                          </FormItem>
+                        </>
+                      )}
+
                       {/* 아직 구체화되지 않은 나머지 섹션들의 플레이스홀더 */}
-                      {!['theme', 'bgm', 'main', 'hosts', 'eventInfo', 'greeting', 'account', 'location'].includes(item.id) && (
+                      {!['theme', 'bgm', 'main', 'hosts', 'eventInfo', 'greeting', 'account', 'location', 'gallery'].includes(item.id) && (
                         <div className="h-20 flex items-center justify-center text-on-surface-30 text-sm bg-slate-50 rounded-lg border border-dashed border-border">
                           {item.label} 세부 입력 폼이 조립될 영역입니다.
                         </div>
@@ -3218,12 +3564,18 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                 }}
               />
 
-              {/* 9:16 가이드 프레임 + 바깥 딤(정사각형 내부) */}
-              <div className="absolute inset-0 grid grid-cols-[1fr_auto_1fr] pointer-events-none">
-                <div className="bg-black/50" />
-                <div className="h-full aspect-[9/16] outline outline-2 outline-offset-[-2px] outline-[color:var(--key)]" />
-                <div className="bg-black/50" />
-              </div>
+              {imageEditorAspect === 'square' ? (
+                <div className="absolute inset-0 pointer-events-none outline outline-2 outline-offset-[-2px] outline-[color:var(--key)] rounded-lg" />
+              ) : (
+                <>
+                  {/* 9:16 가이드 프레임 + 바깥 딤(정사각형 내부) */}
+                  <div className="absolute inset-0 grid grid-cols-[1fr_auto_1fr] pointer-events-none">
+                    <div className="bg-black/50" />
+                    <div className="h-full aspect-[9/16] outline outline-2 outline-offset-[-2px] outline-[color:var(--key)]" />
+                    <div className="bg-black/50" />
+                  </div>
+                </>
+              )}
             </div>
 
             {/* 컨트롤 */}
