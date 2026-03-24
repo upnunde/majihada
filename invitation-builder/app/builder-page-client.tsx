@@ -1642,8 +1642,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
               : '';
 
         return (
-          <div className="w-full flex flex-col items-center gap-0">
-            <div className="w-full max-w-[320px] aspect-[9/16] rounded-none flex flex-col justify-end items-center text-white shadow-none overflow-hidden relative">
+          <div className="w-full flex flex-col items-stretch gap-0">
+            <div className="w-full aspect-[9/16] rounded-none flex flex-col justify-end items-stretch text-white shadow-none overflow-hidden relative">
               {/* 배경 이미지 레이어 */}
               {transitionEffect === '디졸브' || transitionEffect === '크로스페이드' ? (
                 <>
@@ -1686,11 +1686,11 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                 </>
               )}
 
-              <div className="w-full bg-black/35 px-6 py-6 flex flex-col items-center text-center">
-                <p className="text-[0.75em] tracking-[0.2em] uppercase text-white/80 mb-1">
+              <div className="w-full bg-black/35 px-3 py-3 flex flex-col items-center text-center">
+                <p className="text-[0.75em] tracking-[0.2em] uppercase text-white/80">
                   Wedding Invitation
                 </p>
-                <h1 className="text-[1.25em] font-semibold tracking-tight mb-1">
+                <h1 className="text-[1.25em] font-semibold tracking-tight">
                   {data.main.title}
                 </h1>
                 <p className="text-[0.875em] text-white/90">
@@ -2076,7 +2076,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                 </div>
               )}
               {visibleList.map((acc) => (
-                <div key={acc.id} className="rounded-lg border border-border bg-white px-3 py-3 text-left">
+                <div key={acc.id} className="rounded-lg border border-border bg-[color:var(--surface-20)] px-3 py-3 text-left">
                   <div className="text-[0.75em] text-on-surface-30">{acc.groupName || "그룹명"}</div>
                   <div className="font-semibold text-on-surface-10">{acc.bank || "은행"} {acc.accountNumber || "계좌번호"}</div>
                   <div className="text-on-surface-30">{acc.holder || "예금주"}</div>
@@ -2332,7 +2332,10 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           style={{ width: editorWidth }}
         >
           <div ref={editorScrollRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scroll-smooth no-scrollbar">
-            <div className="p-4 flex-1 flex flex-col gap-4 bg-[color:var(--surface-10)] [&>div]:p-0">
+            <div
+              className="p-4 flex-1 flex flex-col gap-4 [&>div]:p-0"
+              style={{ backgroundColor: data.style.bgColor || 'var(--surface-10)' }}
+            >
               {orderedItems.map((item, idx) => {
                 const isInitiallyExpanded = true;
                 const isContentOptional = item.category === '선택' && !OTHER_OPTION_IDS.includes(item.id as any);
@@ -2359,7 +2362,9 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                   } ${
                     isDragging
                       ? 'border-[color:var(--key)] ring-2 ring-[color:var(--key)]/20 shadow-lg scale-[1.01] opacity-60 z-10 relative'
-                      : 'border-border'
+                      : activeSection === item.id
+                        ? 'border-[color:var(--key)] ring-1 ring-[color:var(--key)]/25 shadow-sm'
+                        : 'border-border'
                   }`}
                   onFocusCapture={() => setActiveSection(item.id)}
                   onPointerEnter={() => editorSortProps?.wrapperProps.onPointerEnter()}
@@ -3878,6 +3883,21 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                       {/* 갤러리 섹션 */}
                       {item.id === 'gallery' && (
                         <>
+                          <FormItem label={`사진 ${Array.isArray((data.gallery as any).images) ? (data.gallery as any).images.length : 0}/50`}>
+                            <div className="flex-1 flex flex-col gap-2 w-full">
+                              <GalleryImageGrid
+                                images={Array.isArray((data.gallery as any).images) ? (data.gallery as any).images : []}
+                                onChange={(next) => updateData('gallery.images', next)}
+                                onEdit={(i, src) => openImageEditor({ kind: 'gallery', index: i }, src)}
+                                imageRatio={((data.gallery as any).imageRatio ?? 'portrait') as 'square' | 'portrait'}
+                                max={50}
+                              />
+                              <div className="text-[12px] text-on-surface-30">
+                                * 이미지를 한 번에 최대 50장까지 선택해서 추가할 수 있어요.
+                              </div>
+                            </div>
+                          </FormItem>
+
                           <FormItem label="사진 비율">
                             <div className="flex flex-wrap gap-2">
                               {([
@@ -3965,20 +3985,6 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                             </>
                           )}
 
-                          <FormItem label={`사진 ${Array.isArray((data.gallery as any).images) ? (data.gallery as any).images.length : 0}/50`}>
-                            <div className="flex-1 flex flex-col gap-2 w-full">
-                              <GalleryImageGrid
-                                images={Array.isArray((data.gallery as any).images) ? (data.gallery as any).images : []}
-                                onChange={(next) => updateData('gallery.images', next)}
-                                onEdit={(i, src) => openImageEditor({ kind: 'gallery', index: i }, src)}
-                                imageRatio={((data.gallery as any).imageRatio ?? 'portrait') as 'square' | 'portrait'}
-                                max={50}
-                              />
-                              <div className="text-[12px] text-on-surface-30">
-                                * 이미지를 한 번에 최대 50장까지 선택해서 추가할 수 있어요.
-                              </div>
-                            </div>
-                          </FormItem>
                           <FormItem label="옵션">
                             <div className="flex-1 flex flex-col gap-4">
                               <span
@@ -4507,7 +4513,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                     key={sectionId}
                     data-preview-section-id={sectionId}
                     className={`${sectionId === 'main'
-                      ? "w-full flex flex-col items-center text-center"
+                      ? "w-full flex flex-col items-stretch text-center"
                       : "w-full py-6 px-6 flex flex-col items-center text-center"
                       } ${data.theme.scrollEffect
                         ? (previewVisibleSections[sectionId]
