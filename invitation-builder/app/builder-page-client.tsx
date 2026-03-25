@@ -5265,7 +5265,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
         </section>
 
         {/* 3. 우측 미리보기 패널 (화면 전체 높이, 위아래 20px 간격) */}
-        <main className="hidden lg:flex flex-1 flex-col items-center min-h-0 overflow-hidden py-5 px-6 bg-gray-50 shadow-none">
+        <main className="hidden flex-1 flex-col items-center min-h-0 overflow-hidden py-5 px-6 bg-gray-50 shadow-none">
           {/* 바깥 컨테이너는 고정, 내부 프레임만 스크롤 */}
           <div className="flex-1 min-h-0 flex justify-center w-full max-w-[400px] min-h-full bg-transparent items-stretch shadow-none">
             <div
