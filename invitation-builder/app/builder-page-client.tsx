@@ -293,11 +293,25 @@ function NaverMapEmbed({
         center,
         zoom: 16,
         mapTypeId: window.naver.maps.MapTypeId.NORMAL,
+        draggable: false,
+        scrollWheel: false,
+        keyboardShortcuts: false,
         scaleControl: false,
         logoControl: false,
         mapDataControl: false,
         zoomControl: false,
       });
+      // 일부 SDK 버전/환경에서는 옵션만으로는 제스처 드래그가 남는 경우가 있어,
+      // 안전하게 한 번 더 비활성화합니다.
+      try {
+        (map as any).setOptions?.({ draggable: false, scrollWheel: false, keyboardShortcuts: false });
+      } catch {
+        // ignore
+      }
+      if (containerRef.current) {
+        containerRef.current.style.touchAction = "none";
+        containerRef.current.style.cursor = "default";
+      }
       new window.naver.maps.Marker({ position: center, map });
 
       // SDK가 "인증 실패" 텍스트를 컨테이너에 렌더링하는 경우를 감지해 폴백 처리한다.
@@ -424,7 +438,7 @@ const builtInTracks = [
   { id: 'classic-1', label: '클래식 (잔잔한)' , url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3' },
   { id: 'jazz-1', label: '재즈 (스윙)' , url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3' },
   { id: 'march-1', label: '발랄한 행진곡' , url: '/audio/neti-main-theme.mp3' },
-  { id: 'piano-1', label: '피아노 (로맨틱)' , url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' },
+  { id: 'piano-1', label: '피아노 (로맨틱)' , url: '/audio/piano-romantic.mp4' },
   { id: 'acoustic-1', label: '어쿠스틱 (따뜻한)' , url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3' },
   { id: 'string-1', label: '스트링 (웅장한)' , url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3' },
   { id: 'lofi-1', label: '로파이 (감성)' , url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3' },
@@ -793,10 +807,87 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   const [naverPreviewFailed, setNaverPreviewFailed] = useState(false);
   const [previewVisibleSections, setPreviewVisibleSections] = useState<Record<string, boolean>>({});
   const [sharePreviewOpen, setSharePreviewOpen] = useState(false);
+  const [shareThumbnailPickerOpen, setShareThumbnailPickerOpen] = useState(false);
   const [galleryDetailOpen, setGalleryDetailOpen] = useState(false);
   const [galleryDetailIndex, setGalleryDetailIndex] = useState(0);
   const previewScrollRef = useRef<HTMLDivElement | null>(null);
   const previewFrameRef = useRef<HTMLDivElement | null>(null);
+
+  // 공유 섹션 기본 썸네일 프리셋 (SVG를 data-uri로 생성)
+  const shareThumbnailPresets = useMemo(() => {
+    const makeDataUri = (svg: string) =>
+      `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+
+    const makeBase = (bg1: string, bg2: string, inner: string) => `
+      <svg xmlns="http://www.w3.org/2000/svg" width="300" height="157" viewBox="0 0 300 157">
+        <defs>
+          <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="${bg1}"/>
+            <stop offset="1" stop-color="${bg2}"/>
+          </linearGradient>
+        </defs>
+        <rect width="300" height="157" rx="22" fill="url(#bg)"/>
+        <rect x="0" y="0" width="300" height="157" rx="22" fill="rgba(255,255,255,0.12)"/>
+        ${inner}
+      </svg>
+    `;
+
+    const heart = (color: string) => `
+      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="${color}" transform="translate(132 45) scale(4.2)"/>
+      <path d="M150 87c-10-7-22-17-22-29 0-6 5-11 11-11 4 0 8 3 11 7 3-4 7-7 11-7 6 0 11 5 11 11 0 12-12 22-22 29z" fill="rgba(255,255,255,0.25)"/>
+    `;
+
+    const ring = (stroke: string) => `
+      <g fill="none" stroke="${stroke}" stroke-width="8" stroke-linecap="round">
+        <path d="M150 54c-44 0-80 25-80 54s36 54 80 54 80-25 80-54-36-54-80-54z" opacity="0.12"/>
+        <circle cx="150" cy="90" r="44"/>
+        <circle cx="150" cy="90" r="30" stroke="rgba(255,255,255,0.35)" stroke-width="6"/>
+      </g>
+      <path d="M150 56c-26 6-42 22-42 34 0 14 18 31 42 34 24-3 42-20 42-34 0-12-16-28-42-34z" fill="rgba(255,255,255,0.12)"/>
+    `;
+
+    const flower = (color: string) => `
+      <g opacity="0.95">
+        ${[0, 60, 120, 180, 240, 300].map((a) => {
+          const rad = (a * Math.PI) / 180;
+          const x = 150 + Math.cos(rad) * 36;
+          const y = 90 + Math.sin(rad) * 26;
+          return `<circle cx="${x}" cy="${y}" r="14" fill="${color}" opacity="0.75"/>`;
+        }).join("")}
+        <circle cx="150" cy="90" r="16" fill="${color}"/>
+        <circle cx="150" cy="90" r="8" fill="rgba(255,255,255,0.35)"/>
+      </g>
+    `;
+
+    const bow = (color: string) => `
+      <path d="M135 70c-18-14-40-12-52 2-8 10-7 23 2 32 12 12 31 12 46 4 9-5 15-12 17-16z" fill="${color}" opacity="0.8"/>
+      <path d="M165 70c18-14 40-12 52 2 8 10 7 23-2 32-12 12-31 12-46 4-9-5-15-12-17-16z" fill="${color}" opacity="0.8"/>
+      <path d="M150 74c-10 0-18 8-18 18s8 18 18 18 18-8 18-18-8-18-18-18z" fill="${color}"/>
+      <path d="M150 92c-18 0-30 10-30 18 0 6 12 14 30 14s30-8 30-14c0-8-12-18-30-18z" fill="rgba(255,255,255,0.18)"/>
+    `;
+
+    const sparkle = (color: string) => `
+      <g>
+        <path d="M150 52l10 24 24 10-24 10-10 24-10-24-24-10 24-10z" fill="${color}"/>
+        <circle cx="210" cy="95" r="10" fill="${color}" opacity="0.75"/>
+        <circle cx="90" cy="95" r="8" fill="${color}" opacity="0.65"/>
+        <path d="M62 78l4 9 9 4-9 4-4 9-4-9-9-4 9-4z" fill="rgba(255,255,255,0.35)"/>
+      </g>
+    `;
+
+    const presets = [
+      { id: 'heart', label: '하트', bg1: '#FCE7F3', bg2: '#EDE0FD', icon: heart('#7A2FEB') },
+      { id: 'flower', label: '플라워', bg1: '#EAF8F5', bg2: '#FDEFF6', icon: flower('#2D8C7F') },
+      { id: 'ring', label: '링', bg1: '#EEF3FF', bg2: '#EDE0FD', icon: ring('#5D76C9') },
+      { id: 'bow', label: '리본', bg1: '#FFFDFE', bg2: '#F3ECFF', icon: bow('#7A2FEB') },
+      { id: 'sparkle', label: '반짝', bg1: '#F8F9FA', bg2: '#EDE0FD', icon: sparkle('#7A2FEB') },
+    ];
+
+    return presets.map((p) => ({
+      ...p,
+      url: makeDataUri(makeBase(p.bg1, p.bg2, p.icon)),
+    }));
+  }, []);
 
   useEffect(() => {
     setNaverPreviewFailed(false);
@@ -4087,17 +4178,9 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                               <div className="flex flex-1 gap-2">
                                 <Input
                                   value={data.location.address}
-                                  readOnly
-                                  className="shadow-none flex-1 cursor-pointer"
+                                  disabled
+                                  className="shadow-none flex-1 cursor-not-allowed select-none pointer-events-none"
                                   placeholder="검색버튼을 통해 주소를 추가해주세요"
-                                  onClick={() => {
-                                    setLocationSearchQuery('');
-                                    setLocationSearchSelected(null);
-                                    setLocationSearchOpen(true);
-                                  }}
-                                  onKeyDown={(e) => {
-                                    e.preventDefault();
-                                  }}
                                 />
                                 <Button
                                   type="button"
@@ -5115,7 +5198,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                                   </div>
                                   <div className="h-full flex flex-col justify-start gap-2">
                                     <label className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-10 inline-flex items-center cursor-pointer hover:bg-slate-50 w-fit self-start whitespace-nowrap leading-none flex-shrink-0">
-                                      이미지 선택
+                                      사진 업로드
                                       <input
                                         type="file"
                                         accept="image/*"
@@ -5129,6 +5212,13 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                                         }}
                                       />
                                     </label>
+                                    <button
+                                      type="button"
+                                      className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-20 hover:bg-slate-50 whitespace-nowrap leading-none flex-shrink-0 w-fit self-start"
+                                      onClick={() => setShareThumbnailPickerOpen(true)}
+                                    >
+                                      이미지 고르기
+                                    </button>
                                     {data.share?.thumbnail && (
                                       <button
                                         type="button"
@@ -5608,6 +5698,55 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
               variant="outline"
               className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-10 inline-flex items-center cursor-pointer hover:bg-slate-50"
               onClick={() => setSharePreviewOpen(false)}
+            >
+              닫기
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={shareThumbnailPickerOpen} onOpenChange={setShareThumbnailPickerOpen}>
+        <DialogContent className="w-[520px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border p-0 overflow-hidden">
+          <div className="p-5 border-b border-border bg-white">
+            <DialogTitle className="text-[16px] font-semibold text-on-surface-10">
+              기본 일러스트 썸네일 선택
+            </DialogTitle>
+            <div className="text-[12px] text-on-surface-30 mt-1">
+              원하는 썸네일을 클릭하면 공유 썸네일로 적용됩니다.
+            </div>
+          </div>
+          <div className="p-5 bg-[color:var(--surface-10)]">
+            <div className="grid grid-cols-4 gap-3">
+              {shareThumbnailPresets.map((t) => {
+                const selected = data.share?.thumbnail === t.url;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className={`rounded-lg overflow-hidden border bg-white ${
+                      selected ? 'border-[color:var(--key)]' : 'border-border'
+                    } hover:border-[color:var(--key)]/50`}
+                    onClick={() => {
+                      updateData('share.thumbnail', t.url);
+                      setShareThumbnailPickerOpen(false);
+                    }}
+                  >
+                    <img
+                      src={t.url}
+                      alt={`${t.label} 썸네일`}
+                      className="w-full aspect-[1.91/1] object-cover"
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="p-4 border-t border-border bg-white flex justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-10 inline-flex items-center cursor-pointer hover:bg-slate-50"
+              onClick={() => setShareThumbnailPickerOpen(false)}
             >
               닫기
             </Button>
