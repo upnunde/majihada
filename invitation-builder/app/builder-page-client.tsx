@@ -1973,8 +1973,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                 {showHostContacts && renderContactButtons(groom.phone)}
               </div>
               <div className="space-y-3">
-                <p className="text-[1.75em] text-on-surface-30 leading-none">신부</p>
-                <p className="text-[2.125em] font-semibold text-on-surface-10 leading-none">
+                <p className="text-[1em] text-on-surface-30 leading-none">신부</p>
+                <p className="text-[1.5em] font-semibold text-on-surface-10 leading-none">
                   {bride.name || '신부 이름'}
                 </p>
                 <p className="text-[1.75em] text-on-surface-30 leading-snug break-keep">
@@ -1994,6 +1994,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
         const showDday = !!(data.eventInfo as any)?.showDday;
 
         let ddayLabel = "";
+        let ddayStatusText = "";
         if (showDday && isValidEventDate) {
           const today = new Date();
           today.setHours(0, 0, 0, 0);
@@ -2001,6 +2002,10 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           target.setHours(0, 0, 0, 0);
           const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
           ddayLabel = diffDays > 0 ? `D-${diffDays}` : diffDays < 0 ? `D+${Math.abs(diffDays)}` : "D-DAY";
+          const absDays = Math.abs(diffDays);
+          if (diffDays > 0) ddayStatusText = `${absDays}일 남았습니다`;
+          else if (diffDays < 0) ddayStatusText = `${absDays}일 지났습니다`;
+          else ddayStatusText = "오늘입니다";
         }
 
         let monthLabel = "";
@@ -2029,7 +2034,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
               <p className="text-[0.875em] font-semibold text-on-surface-10">
                 {data.eventInfo.date} · {data.eventInfo.time}
               </p>
-              {ddayLabel && (
+              {ddayLabel && !showCalendar && (
                 <span className="h-6 px-2 rounded-full bg-[color:var(--primary-container)] text-[color:var(--on-primary-container)] text-[0.75em] font-semibold inline-flex items-center">
                   {ddayLabel}
                 </span>
@@ -2037,12 +2042,12 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
             </div>
 
             {showCalendar && isValidEventDate && (
-              <div className="w-full rounded-xl border border-[color:var(--key)]/20 bg-[color:var(--primary-container)] p-3 text-left shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-                <div className="flex items-center justify-between mb-2">
+              <div className="w-full rounded-none border-0 bg-[color:var(--primary-container)] p-0 text-left shadow-none">
+                <div className="flex items-center justify-between">
                   <p className="text-[0.75em] font-semibold text-[color:var(--on-primary-container)]">WEDDING CALENDAR</p>
                   <p className="text-[0.75em] text-[color:var(--on-primary-container)]/80">{monthLabel}</p>
                 </div>
-                <div className="grid grid-cols-7 gap-1 text-center text-[0.68em] text-[color:var(--on-primary-container)]/70 mb-1">
+                <div className="grid grid-cols-7 gap-1 text-center text-[clamp(12px,1.2vw,12px)] text-[color:var(--on-primary-container)]/70">
                   {["일", "월", "화", "수", "목", "금", "토"].map((w) => (
                     <span key={w}>{w}</span>
                   ))}
@@ -2052,7 +2057,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                     <div
                       key={cell.key}
                       className={[
-                        "h-7 rounded-md flex items-center justify-center text-[0.74em]",
+                        // 달력 셀: 가로/세로 고정해서 정사각형 비율 유지 + 원형 스타일
+                        "h-8 w-8 rounded-full flex items-center justify-center text-[12px] justify-self-center leading-none",
                         cell.day
                           ? cell.isEvent
                             ? "bg-[color:var(--key)] text-white font-semibold shadow-sm"
@@ -2064,6 +2070,12 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                     </div>
                   ))}
                 </div>
+
+                {ddayStatusText && (
+                  <div className="w-full text-center text-[0.95em] font-semibold text-on-surface-10 leading-none">
+                    신랑 <span className="text-red-500">&hearts;</span> 신부의 결혼식이 {ddayStatusText}.
+                  </div>
+                )}
               </div>
             )}
 
@@ -5083,13 +5095,13 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                                         className="w-full h-full object-cover"
                                       />
                                     ) : (
-                                      <div className="w-full h-full flex items-center justify-center text-[12px] text-on-surface-30">
+                                      <div className="w-full h-full flex items-center justify-center text-[clamp(10px,1.6vw,12px)] text-on-surface-30">
                                         썸네일 이미지가 없습니다.
                                       </div>
                                     )}
                                   </div>
                                   <div className="h-full flex flex-col justify-start gap-2">
-                                    <label className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-10 inline-flex items-center cursor-pointer hover:bg-slate-50">
+                                    <label className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-10 inline-flex items-center cursor-pointer hover:bg-slate-50 w-fit self-start whitespace-nowrap leading-none flex-shrink-0">
                                       이미지 선택
                                       <input
                                         type="file"
@@ -5253,7 +5265,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
         </section>
 
         {/* 3. 우측 미리보기 패널 (화면 전체 높이, 위아래 20px 간격) */}
-        <main className="hidden flex-1 flex-col items-center min-h-0 overflow-hidden py-5 px-6 bg-gray-50 shadow-none">
+        <main className="hidden lg:flex flex-1 flex-col items-center min-h-0 overflow-hidden py-5 px-6 bg-gray-50 shadow-none">
           {/* 바깥 컨테이너는 고정, 내부 프레임만 스크롤 */}
           <div className="flex-1 min-h-0 flex justify-center w-full max-w-[400px] min-h-full bg-transparent items-stretch shadow-none">
             <div
@@ -5281,7 +5293,9 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                     data-preview-section-id={sectionId}
                     className={`${sectionId === 'main'
                       ? "w-full flex flex-col items-stretch text-center"
-                      : "w-full py-6 px-6 flex flex-col items-center text-center"
+                      : sectionId === 'eventInfo' && (data.eventInfo as any)?.useCalendar
+                        ? "w-full p-0 flex flex-col items-center text-center"
+                        : "w-full py-6 px-6 flex flex-col items-center text-center"
                       } ${data.theme.scrollEffect
                         ? (previewVisibleSections[sectionId]
                           ? 'opacity-100 translate-y-0 duration-500 ease-out'
