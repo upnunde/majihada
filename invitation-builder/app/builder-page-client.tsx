@@ -2897,7 +2897,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           </div>
 
           <div className="w-full border-t border-border mb-4"></div>
-          <div className="w-full text-center mb-2"><span className="text-[12px] font-bold text-on-surface-30">기타옵션</span></div>
+          <div className="w-full text-center mb-2"><span className="text-[12px] font-bold text-on-surface-30">옵션</span></div>
           <div className="flex flex-col gap-y-2 pb-10 w-full items-center">
             {otherOptionItems.map((item) => {
               const isActive = activeSection === item.id;
@@ -2948,7 +2948,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                   <div className="text-[13px] font-bold text-on-surface-30 pt-2 mt-10">선택사항</div>
                 )}
                 {isFirstOtherOption && (
-                  <div className="text-[13px] font-bold text-on-surface-30 pt-2 mt-10">기타옵션</div>
+                  <div className="text-[13px] font-bold text-on-surface-30 pt-2 mt-10">옵션</div>
                 )}
                 <div
                   id={item.id}
