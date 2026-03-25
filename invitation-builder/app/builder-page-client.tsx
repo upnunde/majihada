@@ -4935,17 +4935,19 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
             <div
               ref={previewFrameRef}
               className="w-full border border-border rounded-lg bg-white flex flex-col items-stretch text-center overflow-hidden relative"
-              style={{
-                // 향후 theme.bgColor / theme.fontFamily를 전역 테마로 사용
-                backgroundColor: selectedKeyColorPreset.background,
-                fontFamily: data.theme.fontFamily,
-                fontSize: `${fontScaleToPercent((data.theme as any).fontScale)}%`,
-                '--primary-custom': selectedKeyColorPreset.key,
-                '--key': selectedKeyColorPreset.key,
-                '--key-dark': selectedKeyColorPreset.keyDark,
-                '--primary-container': selectedKeyColorPreset.primaryContainer,
-                '--on-primary-container': selectedKeyColorPreset.onPrimaryContainer,
-              }}
+              style={
+                {
+                  // 향후 theme.bgColor / theme.fontFamily를 전역 테마로 사용
+                  backgroundColor: selectedKeyColorPreset.background,
+                  fontFamily: data.theme.fontFamily,
+                  fontSize: `${fontScaleToPercent((data.theme as any).fontScale)}%`,
+                  '--primary-custom': selectedKeyColorPreset.key,
+                  '--key': selectedKeyColorPreset.key,
+                  '--key-dark': selectedKeyColorPreset.keyDark,
+                  '--primary-container': selectedKeyColorPreset.primaryContainer,
+                  '--on-primary-container': selectedKeyColorPreset.onPrimaryContainer,
+                } as React.CSSProperties
+              }
             >
               <div ref={previewScrollRef} className="flex-1 overflow-y-auto no-scrollbar">
                 {layoutOrder.map((sectionId) => (
