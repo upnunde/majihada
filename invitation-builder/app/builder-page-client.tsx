@@ -3099,19 +3099,24 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                           </FormItem>
 
                           {/* 스크롤 등장 효과 */}
-                          <FormItem label="스크롤효과">
-                            <div className="flex flex-wrap gap-2">
-                              <OptionChip
-                                label="켜짐"
-                                active={!!data.theme.scrollEffect}
-                                onClick={() => updateData('theme.scrollEffect', true)}
+                          <FormItem label="옵션">
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              className="inline-flex items-center gap-2 text-[13px] text-on-surface-20 select-none cursor-pointer"
+                              onClick={() => updateData('theme.scrollEffect', !data.theme.scrollEffect)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  updateData('theme.scrollEffect', !data.theme.scrollEffect);
+                                }
+                              }}
+                            >
+                              <CircleCheckbox
+                                checked={!!data.theme.scrollEffect}
+                                onChange={(e) => updateData('theme.scrollEffect', e.target.checked)}
                               />
-                              <OptionChip
-                                label="꺼짐"
-                                active={!data.theme.scrollEffect}
-                                onClick={() => updateData('theme.scrollEffect', false)}
-                              />
-                            </div>
+                              스크롤 시 노출 효과
+                            </span>
                           </FormItem>
                         </>
                       )}
@@ -4084,7 +4089,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                                   value={data.location.address}
                                   readOnly
                                   className="shadow-none flex-1 cursor-pointer"
-                                  placeholder="주소를 입력하거나 검색하여 추가해 주세요"
+                                  placeholder="검색버튼을 통해 주소를 추가해주세요"
                                   onClick={() => {
                                     setLocationSearchQuery('');
                                     setLocationSearchSelected(null);
