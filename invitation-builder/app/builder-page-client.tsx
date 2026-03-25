@@ -213,6 +213,7 @@ import { useCardStore } from "../store/useCardStore";
 import { useSortable } from "@/lib/useSortable";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import GuestPhotoUploadForm from "@/components/GuestPhotoUploadForm";
+import ParticleCanvasOverlay from "@/components/ParticleCanvasOverlay";
 
 declare global {
   interface Window {
@@ -702,7 +703,7 @@ function GalleryImageGrid({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className={`relative w-[100px] ${thumbAspectClass} rounded-lg border border-dashed border-border bg-transparent hover:bg-transparent flex items-center justify-center text-3xl text-on-surface-30`}
+              className={`relative w-[100px] ${thumbAspectClass} rounded-lg border border-dashed border-border bg-white hover:bg-slate-50 flex items-center justify-center text-3xl text-on-surface-30 bg-center bg-cover bg-clip-border bg-origin-border`}
               aria-label="갤러리 이미지 추가"
             >
               +
@@ -5272,6 +5273,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                 } as React.CSSProperties
               }
             >
+              <ParticleCanvasOverlay effect={(data.theme as any)?.particleEffect ?? 'none'} />
               <div ref={previewScrollRef} className="flex-1 overflow-y-auto no-scrollbar">
                 {layoutOrder.map((sectionId) => (
                   <div
