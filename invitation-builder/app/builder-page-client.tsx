@@ -4082,9 +4082,17 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                               <div className="flex flex-1 gap-2">
                                 <Input
                                   value={data.location.address}
-                                  onChange={(e) => updateData('location.address', e.target.value)}
-                                  className="shadow-none flex-1"
+                                  readOnly
+                                  className="shadow-none flex-1 cursor-pointer"
                                   placeholder="주소를 입력하거나 검색하여 추가해 주세요"
+                                  onClick={() => {
+                                    setLocationSearchQuery('');
+                                    setLocationSearchSelected(null);
+                                    setLocationSearchOpen(true);
+                                  }}
+                                  onKeyDown={(e) => {
+                                    e.preventDefault();
+                                  }}
                                 />
                                 <Button
                                   type="button"
