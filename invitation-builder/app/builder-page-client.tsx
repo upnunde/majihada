@@ -2,9 +2,27 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Palette, Music, Image as ImageIcon, Users, MessageSquare, CalendarHeart, MapPin, Bell, Images, Wallet, BookOpen, Youtube, Share2, Shield, CheckCircle2, GripVertical, Play, Pause, VolumeX, Volume2, X, ChevronDown, ChevronLeft, ChevronRight, Pencil, Trash2, RotateCw, RefreshCcw, Move } from 'lucide-react';
+import { Palette, Music, Image as ImageIcon, Users, MessageSquare, MessageCircle, Phone, CalendarHeart, MapPin, Bell, Images, Wallet, BookOpen, Youtube, Share2, Shield, CheckCircle2, GripVertical, Play, Pause, VolumeX, Volume2, X, ChevronDown, ChevronLeft, ChevronRight, MoreVertical, Pencil, Trash2, RotateCw, RefreshCcw, Move } from 'lucide-react';
 
 const DEFAULT_LOCATION_PREVIEW_COORDS = { lat: 37.579617, lon: 126.977041 }; // 경복궁
+
+type KeyColorPreset = {
+  id: string;
+  label: string;
+  key: string;
+  keyDark: string;
+  primaryContainer: string;
+  onPrimaryContainer: string;
+  background: string;
+};
+
+const KEY_COLOR_PRESETS: KeyColorPreset[] = [
+  { id: "pastel-1", label: "더미 1", key: "#A785E8", keyDark: "#8B68D4", primaryContainer: "#F3ECFF", onPrimaryContainer: "#6F4CB8", background: "#FFFCFF" },
+  { id: "pastel-2", label: "더미 2", key: "#E7A3C5", keyDark: "#D489B0", primaryContainer: "#FDEFF6", onPrimaryContainer: "#B45D8B", background: "#FFFDFE" },
+  { id: "pastel-3", label: "더미 3", key: "#8ECFC5", keyDark: "#74B8AE", primaryContainer: "#EAF8F5", onPrimaryContainer: "#4F988D", background: "#FAFEFD" },
+  { id: "pastel-4", label: "더미 4", key: "#9FB6F4", keyDark: "#839CE0", primaryContainer: "#EEF3FF", onPrimaryContainer: "#5D76C9", background: "#FCFDFF" },
+  { id: "pastel-5", label: "더미 5", key: "#EBC39A", keyDark: "#D4A978", primaryContainer: "#FCF2E7", onPrimaryContainer: "#B67D43", background: "#FFFEFC" },
+];
 
 function buildOsmEmbedUrl(lat: number, lon: number) {
   const delta = 0.01;
@@ -182,6 +200,14 @@ import { Input as RawInput } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { useCardStore } from "../store/useCardStore";
 import { useSortable } from "@/lib/useSortable";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -751,6 +777,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   const [noticeSampleOpen, setNoticeSampleOpen] = useState(false);
   const [noticeSampleTab, setNoticeSampleTab] = useState<'general' | 'parking' | 'meal'>('general');
   const [noticeSelectedSample, setNoticeSelectedSample] = useState<{ title: string; content: string } | null>(null);
+  const [noticeEditorTabIndex, setNoticeEditorTabIndex] = useState(0);
+  const [noticePreviewTabIndex, setNoticePreviewTabIndex] = useState(0);
   const [locationSearchOpen, setLocationSearchOpen] = useState(false);
   const [locationSearchQuery, setLocationSearchQuery] = useState('');
   const [locationSearchSelected, setLocationSearchSelected] = useState<string | null>(null);
@@ -762,6 +790,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   const [galleryDetailOpen, setGalleryDetailOpen] = useState(false);
   const [galleryDetailIndex, setGalleryDetailIndex] = useState(0);
   const previewScrollRef = useRef<HTMLDivElement | null>(null);
+  const previewFrameRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setNaverPreviewFailed(false);
@@ -797,12 +826,38 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
     return () => observer.disconnect();
   }, [data.theme.scrollEffect, data.sectionEnabled, optionalOrder]);
 
+  const scrollPreviewToSection = (sectionId: string) => {
+    const root = previewScrollRef.current;
+    if (!root) return;
+    const target = root.querySelector<HTMLElement>(`[data-preview-section-id="${sectionId}"]`);
+    if (!target) return;
+
+    // 현재 편집 중인 섹션이 미리보기 중앙 부근에 오도록 자동 정렬
+    const targetTop = target.offsetTop;
+    const targetHeight = target.offsetHeight;
+    const centerOffset = (root.clientHeight - targetHeight) / 2;
+    const desiredTop = targetTop - centerOffset;
+    const maxTop = Math.max(0, root.scrollHeight - root.clientHeight);
+    const nextTop = Math.min(maxTop, Math.max(0, desiredTop));
+    root.scrollTo({ top: nextTop, behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollPreviewToSection(activeSection);
+  }, [activeSection]);
+
   const [mainPreviewIndex, setMainPreviewIndex] = useState(0);
   const [mainPreviewPrevIndex, setMainPreviewPrevIndex] = useState<number | null>(null);
   const [mainPreviewAnimKey, setMainPreviewAnimKey] = useState(0);
   const [galleryPreviewIndex, setGalleryPreviewIndex] = useState(0);
   const [galleryGridVisibleRows, setGalleryGridVisibleRows] = useState(3);
   const [guestbookPreviewPage, setGuestbookPreviewPage] = useState(1);
+  const [guestbookMenuEntryId, setGuestbookMenuEntryId] = useState<string | null>(null);
+  const [guestbookComposerOpen, setGuestbookComposerOpen] = useState(false);
+  const [guestbookDraftName, setGuestbookDraftName] = useState("");
+  const [guestbookDraftMessage, setGuestbookDraftMessage] = useState("");
+  const [guestbookDraftPassword, setGuestbookDraftPassword] = useState("");
+  const [accountPreviewExpandedMap, setAccountPreviewExpandedMap] = useState<Record<string, boolean>>({});
   const gallerySwipeStartXRef = useRef<number | null>(null);
   const [mainPreviewRandomEffect, setMainPreviewRandomEffect] = useState<
     | '크로스페이드'
@@ -811,6 +866,10 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
     | '켄번즈(줌 인)'
     | '켄번즈(줌 아웃)'
   >('크로스페이드');
+  const selectedKeyColorPreset = useMemo(() => {
+    const selectedId = (data.theme as any)?.colorPreset;
+    return KEY_COLOR_PRESETS.find((preset) => preset.id === selectedId) ?? KEY_COLOR_PRESETS[0];
+  }, [(data.theme as any)?.colorPreset]);
 
   useEffect(() => {
     setGalleryGridVisibleRows(3);
@@ -822,8 +881,38 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   ]);
 
   useEffect(() => {
+    const displayMode = ((data.accounts as any)?.displayMode ?? 'accordion') as 'accordion' | 'expanded';
+    if (displayMode !== 'accordion') return;
+    const list = Array.isArray(data.accounts?.list) ? data.accounts.list : [];
+    setAccountPreviewExpandedMap((prev) => {
+      const next: Record<string, boolean> = {};
+      for (const acc of list) {
+        next[acc.id] = prev[acc.id] ?? !!acc.isExpanded;
+      }
+      return next;
+    });
+  }, [data.accounts?.list, (data.accounts as any)?.displayMode]);
+
+  useEffect(() => {
     setGuestbookPreviewPage(1);
   }, [Array.isArray((data.guestbook as any)?.entries) ? (data.guestbook as any).entries.length : 0]);
+
+  useEffect(() => {
+    if (!guestbookMenuEntryId) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('[data-guestbook-menu-root="true"]')) return;
+      if (target.closest('[data-guestbook-menu-trigger="true"]')) return;
+      setGuestbookMenuEntryId(null);
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+    };
+  }, [guestbookMenuEntryId]);
 
   const [imageEditorOpen, setImageEditorOpen] = useState(false);
   const [imageEditorSrc, setImageEditorSrc] = useState<string>('');
@@ -1515,11 +1604,10 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
     const container = editorScrollRef.current;
     if (!element || !container) return;
 
-    // scrollIntoView는 스크롤 컨테이너에서 가끔 과하게 정렬되어
-    // 최대치를 넘어가며 잘린 것처럼 보일 수 있어 clamp된 scrollTop으로 이동
+    // 선택한 섹션의 상단이 편집 패널 상단 30% 지점에 오도록 정렬
     const elementTop = element.offsetTop;
-    const paddingTop = 16; // p-4
-    const targetTop = elementTop - paddingTop;
+    const anchorOffset = container.clientHeight * 0.3;
+    const targetTop = elementTop - anchorOffset;
     const maxTop = Math.max(0, container.scrollHeight - container.clientHeight);
     const nextTop = Math.min(maxTop, Math.max(0, targetTop));
     container.scrollTo({ top: nextTop, behavior: 'smooth' });
@@ -1595,6 +1683,46 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
     }
 
     closeImageEditor();
+  };
+
+  const noticeSections = useMemo(() => {
+    const rawSections = (data.notice as any)?.sections;
+    if (Array.isArray(rawSections) && rawSections.length > 0) {
+      return rawSections.slice(0, 3).map((section: any, idx: number) => ({
+        id: String(section?.id ?? `notice-${idx + 1}`),
+        title: String(section?.title ?? "").trim() || `안내 ${idx + 1}`,
+        content: String(section?.content ?? ""),
+      }));
+    }
+    const fallbackTitle = (data.notice as any)?.title ?? "안내사항";
+    const fallbackContent =
+      (data.notice as any)?.content ??
+      "마음 편히 오셔서 함께 축복해 주세요.\n예식장 내 주차가 가능하며, 식전 30분 전부터 입장이 가능합니다.";
+    return [
+      {
+        id: "notice-1",
+        title: String(fallbackTitle).trim() || "안내사항",
+        content: String(fallbackContent),
+      },
+    ];
+  }, [data.notice]);
+
+  useEffect(() => {
+    setNoticeEditorTabIndex((prev) => Math.min(prev, Math.max(0, noticeSections.length - 1)));
+    setNoticePreviewTabIndex((prev) => Math.min(prev, Math.max(0, noticeSections.length - 1)));
+  }, [noticeSections.length]);
+
+  const updateNoticeSections = (nextSections: Array<{ id: string; title: string; content: string }>) => {
+    const normalized = nextSections.slice(0, 3).map((section, idx) => ({
+      id: String(section.id || `notice-${idx + 1}`),
+      title: String(section.title ?? "").trim() || `안내 ${idx + 1}`,
+      content: String(section.content ?? ""),
+    }));
+    updateData('notice.sections', normalized);
+    if (normalized[0]) {
+      updateData('notice.title', normalized[0].title);
+      updateData('notice.content', normalized[0].content);
+    }
   };
 
   const renderPreviewSection = (sectionId: string) => {
@@ -1715,44 +1843,64 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
       case 'hosts': {
         const groom = data.hosts.groom;
         const bride = data.hosts.bride;
-        const renderParentLabel = (
-          parent: typeof groom.father,
-          fallback: string,
-        ) => (
-          <>
-            {parent.isDeceased && (
-              <img
-                src="/gukhwa.svg"
-                alt=""
-                className="inline-block w-4 h-4 align-middle mr-1"
-              />
-            )}
-            <span className="align-middle">{parent.name || fallback}</span>
-          </>
-        );
-        return (
-          <div className="max-w-[320px] mx-auto space-y-4 text-[0.8125em] text-on-surface-20">
-            <div>
-              <p className="text-[0.75em] font-semibold tracking-[0.2em] text-on-surface-30 mb-2">
-                GROOM&apos;S FAMILY
-              </p>
-              <p className="text-center flex justify-center items-center">
-                {renderParentLabel(groom.father, '신랑 부')} ·{' '}
-                {renderParentLabel(groom.mother, '신랑 모')}
-                의 아들{' '}
-                <span className="font-semibold text-on-surface-10">{groom.name}</span>
-              </p>
+        const formatParentNames = (
+          father: typeof groom.father,
+          mother: typeof groom.mother,
+          fatherFallback: string,
+          motherFallback: string,
+        ) => `${father.name || fatherFallback} \u00b7 ${mother.name || motherFallback}`;
+        const groomParents = formatParentNames(groom.father, groom.mother, '신랑 부', '신랑 모');
+        const brideParents = formatParentNames(bride.father, bride.mother, '신부 부', '신부 모');
+        const renderContactButtons = (phone: string) => {
+          const normalized = (phone ?? '').trim();
+          const telHref = normalized ? `tel:${normalized}` : undefined;
+          const smsHref = normalized ? `sms:${normalized}` : undefined;
+          return (
+            <div className="pt-2 flex items-center justify-center gap-3">
+              <a
+                href={telHref}
+                className={`w-14 h-14 rounded-full inline-flex items-center justify-center border border-border bg-[color:var(--surface-20)] text-on-surface-30 ${
+                  telHref ? 'hover:bg-[color:var(--surface-10)]' : 'pointer-events-none opacity-40'
+                }`}
+                aria-label="전화하기"
+              >
+                <Phone className="w-5 h-5" />
+              </a>
+              <a
+                href={smsHref}
+                className={`w-14 h-14 rounded-full inline-flex items-center justify-center border border-border bg-[color:var(--surface-20)] text-on-surface-30 ${
+                  smsHref ? 'hover:bg-[color:var(--surface-10)]' : 'pointer-events-none opacity-40'
+                }`}
+                aria-label="문자 보내기"
+              >
+                <MessageCircle className="w-5 h-5" />
+              </a>
             </div>
-            <div>
-              <p className="text-[0.75em] font-semibold tracking-[0.2em] text-on-surface-30 mb-2">
-                BRIDE&apos;S FAMILY
-              </p>
-              <p className="text-center flex justify-center items-center">
-                {renderParentLabel(bride.father, '신부 부')} ·{' '}
-                {renderParentLabel(bride.mother, '신부 모')}
-                의 딸{' '}
-                <span className="font-semibold text-on-surface-10">{bride.name}</span>
-              </p>
+          );
+        };
+        return (
+          <div className="w-full max-w-[340px] mx-auto text-center">
+            <div className="grid grid-cols-2 gap-8">
+              <div className="space-y-3">
+                <p className="text-[1.75em] text-on-surface-30 leading-none">신랑</p>
+                <p className="text-[2.125em] font-semibold text-on-surface-10 leading-none">
+                  {groom.name || '신랑 이름'}
+                </p>
+                <p className="text-[1.75em] text-on-surface-30 leading-snug break-keep">
+                  {groomParents} 의 아들
+                </p>
+                {showHostContacts && renderContactButtons(groom.phone)}
+              </div>
+              <div className="space-y-3">
+                <p className="text-[1.75em] text-on-surface-30 leading-none">신부</p>
+                <p className="text-[2.125em] font-semibold text-on-surface-10 leading-none">
+                  {bride.name || '신부 이름'}
+                </p>
+                <p className="text-[1.75em] text-on-surface-30 leading-snug break-keep">
+                  {brideParents} 의 딸
+                </p>
+                {showHostContacts && renderContactButtons(bride.phone)}
+              </div>
             </div>
           </div>
         );
@@ -1760,9 +1908,6 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
       case 'eventInfo':
         return (
           <div className="max-w-[320px] mx-auto space-y-2 text-[0.8125em] text-on-surface-20">
-            <p className="text-[0.75em] font-semibold tracking-[0.2em] text-on-surface-30">
-              WEDDING DAY
-            </p>
             <p className="text-[0.875em] font-semibold text-on-surface-10">
               {data.eventInfo.date} · {data.eventInfo.time}
             </p>
@@ -1821,9 +1966,6 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
 
           return (
             <div className="w-full px-0 space-y-3 text-[0.8125em] text-on-surface-20 text-center">
-              <p className="text-[0.75em] font-semibold tracking-[0.2em] text-on-surface-30">
-                LOCATION
-              </p>
               <p className="text-[0.875em] font-semibold text-on-surface-10">{title}</p>
 
               <>
@@ -1869,7 +2011,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
 
                   {/* 하단 앱 전송 바 (캡처 스타일) */}
                   {appLinks && (
-                    <div className="w-full bg-[#f2f2f2] border-t border-black/5 grid grid-cols-3 divide-x divide-black/10 text-[13px]">
+                    <div className="w-full bg-[color:var(--surface-10)] border-t border-black/5 grid grid-cols-3 divide-x divide-black/10 text-[13px]">
                       <a
                         href={appLinks.naver.scheme}
                         onClick={openAppOrWeb(appLinks.naver.scheme, appLinks.naver.web)}
@@ -1923,15 +2065,44 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           );
         }
       case 'notice': {
-        const title = (data.notice as any)?.title?.trim() || "안내사항";
-        const content =
-          (data.notice as any)?.content?.trim() ||
-          "마음 편히 오셔서 함께 축복해 주세요.\n예식장 내 주차가 가능하며, 식전 30분 전부터 입장이 가능합니다.";
+        const hasTabs = noticeSections.length > 1;
+        const activeTabIndex = Math.min(noticePreviewTabIndex, noticeSections.length - 1);
+        const activeSection = noticeSections[activeTabIndex] ?? noticeSections[0];
+        const content = activeSection?.content?.trim() || "안내 내용을 입력해 주세요.";
         return (
-          <div className="max-w-[320px] mx-auto text-[0.8125em] text-on-surface-20 space-y-3">
-            <p className="text-[0.75em] font-semibold tracking-[0.2em] text-on-surface-30">NOTICE</p>
-            <p className="text-[0.875em] font-semibold text-on-surface-10">{title}</p>
-            <p className="whitespace-pre-line leading-relaxed">{content}</p>
+          <div className="max-w-full mx-auto w-full text-[0.8125em] text-on-surface-20 space-y-0">
+            {hasTabs ? (
+              <>
+                <div className="flex items-end w-full">
+                  {noticeSections.map((section, idx) => {
+                    const active = idx === activeTabIndex;
+                    return (
+                      <button
+                        key={section.id}
+                        type="button"
+                        onClick={() => setNoticePreviewTabIndex(idx)}
+                        className={[
+                          'h-10 flex-1 min-w-0 px-2 text-[0.875em] border border-border border-b-0 -mr-px',
+                          active
+                            ? 'bg-white text-on-surface-10 rounded-t-xl relative z-[1]'
+                            : 'bg-[color:var(--surface-10)] text-[color:var(--on-surface-disabled)]',
+                        ].join(' ')}
+                      >
+                        <span className="block truncate">{section.title}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="rounded-b-xl rounded-tr-xl border border-border bg-white px-5 py-6">
+                  <p className="whitespace-pre-line leading-relaxed text-[1.1em] text-center">{content}</p>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-[0.875em] font-semibold text-on-surface-10">{activeSection?.title || "안내사항"}</p>
+                <p className="whitespace-pre-line leading-relaxed">{content}</p>
+              </div>
+            )}
           </div>
         );
       }
@@ -2063,25 +2234,50 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
         const title = data.accounts?.title || "마음 전하실 곳";
         const content = data.accounts?.content || "";
         const list = Array.isArray(data.accounts?.list) ? data.accounts.list : [];
-        const visibleList = list.filter((acc) => acc.isExpanded);
+        const displayMode = ((data.accounts as any)?.displayMode ?? 'accordion') as 'accordion' | 'expanded';
         return (
           <div className="max-w-full mx-auto w-full space-y-3 text-[0.8125em] text-on-surface-20">
-            <p className="text-[0.75em] font-semibold tracking-[0.2em] text-on-surface-30">ACCOUNT</p>
             <p className="text-[0.875em] font-semibold text-on-surface-10">{title}</p>
             {content && <p className="whitespace-pre-line leading-relaxed">{content}</p>}
             <div className="space-y-2">
-              {visibleList.length === 0 && (
+              {list.length === 0 && (
                 <div className="rounded-lg border border-dashed border-border py-4 text-on-surface-30">
                   노출할 계좌정보가 없습니다.
                 </div>
               )}
-              {visibleList.map((acc) => (
-                <div key={acc.id} className="rounded-lg border border-border bg-[color:var(--surface-20)] px-3 py-3 text-left">
-                  <div className="text-[0.75em] text-on-surface-30">{acc.groupName || "그룹명"}</div>
-                  <div className="font-semibold text-on-surface-10">{acc.bank || "은행"} {acc.accountNumber || "계좌번호"}</div>
-                  <div className="text-on-surface-30">{acc.holder || "예금주"}</div>
-                </div>
-              ))}
+              {list.map((acc) => {
+                const isOpen = displayMode === 'expanded' ? true : !!accountPreviewExpandedMap[acc.id];
+                return (
+                  <div
+                    key={acc.id}
+                    className="rounded-lg border text-left overflow-hidden bg-[color:var(--primary-container)] border-[color:var(--key)]/20"
+                  >
+                    {displayMode === 'accordion' ? (
+                      <button
+                        type="button"
+                        className="w-full px-3 py-3 flex items-center justify-between gap-2 text-left"
+                        onClick={() =>
+                          setAccountPreviewExpandedMap((prev) => ({
+                            ...prev,
+                            [acc.id]: !prev[acc.id],
+                          }))
+                        }
+                      >
+                        <span className="font-semibold text-[color:var(--on-primary-container)]">{acc.groupName || "그룹명"}</span>
+                        <ChevronDown className={`w-4 h-4 text-[color:var(--on-primary-container)]/70 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                    ) : (
+                      <div className="px-3 pt-3 text-[0.75em] text-[color:var(--on-primary-container)]/70">{acc.groupName || "그룹명"}</div>
+                    )}
+                    {isOpen && (
+                      <div className={`${displayMode === 'accordion' ? 'px-3 pb-3' : 'px-3 py-3'}`}>
+                        <div className="font-semibold text-[color:var(--on-primary-container)]">{acc.bank || "은행"} {acc.accountNumber || "계좌번호"}</div>
+                        <div className="text-[color:var(--on-primary-container)]/75">{acc.holder || "예금주"}</div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         );
@@ -2090,19 +2286,33 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
         const title = ((data.guestbook as any)?.title ?? "방명록") as string;
         const description = ((data.guestbook as any)?.description ?? "축하 인사를 남겨주세요.") as string;
         const hasPassword = Boolean(data.guestbook?.password?.trim());
-        const allowAnonymous = !!(data.guestbook as any)?.allowAnonymous;
         const entries = Array.isArray((data.guestbook as any)?.entries) ? (data.guestbook as any).entries : [];
+        const masterPassword = ((data.guestbook as any)?.password ?? "").trim();
         const orderedEntries = entries;
         const perPage = 5;
         const totalPages = Math.max(1, Math.ceil(orderedEntries.length / perPage));
         const currentPage = Math.min(guestbookPreviewPage, totalPages);
         const pagedEntries = orderedEntries.slice((currentPage - 1) * perPage, currentPage * perPage);
-        const pageStart = Math.max(1, currentPage - 2);
+        const pageStart = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
         const pageEnd = Math.min(totalPages, pageStart + 4);
         const pageNumbers = Array.from({ length: pageEnd - pageStart + 1 }, (_, i) => pageStart + i);
+        const draftMessageLength = guestbookDraftMessage.length;
+        const closeGuestbookComposer = () => {
+          setGuestbookComposerOpen(false);
+          setGuestbookDraftName("");
+          setGuestbookDraftMessage("");
+          setGuestbookDraftPassword("");
+        };
+        const canManageGuestbookEntry = (entry: any, password: string) => {
+          const pass = password.trim();
+          if (!pass) return false;
+          const entryPassword = String((entry as any)?.password ?? "").trim();
+          if (masterPassword && pass === masterPassword) return true;
+          if (entryPassword && pass === entryPassword) return true;
+          return false;
+        };
         return (
           <div className="max-w-full mx-auto w-full space-y-3 text-[0.8125em] text-on-surface-20 text-left">
-            <p className="text-[0.75em] font-semibold tracking-[0.2em] text-on-surface-30">GUESTBOOK</p>
             <p className="text-[0.875em] font-semibold text-on-surface-10">{title}</p>
             <p className="whitespace-pre-line leading-relaxed">{description}</p>
             <div className="space-y-2">
@@ -2112,12 +2322,70 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                 </div>
               )}
               {pagedEntries.map((entry: any) => (
-                <div key={entry.id} className="rounded-2xl border border-border bg-white px-4 py-4 space-y-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                <div key={entry.id} className="rounded-lg border border-border bg-white px-4 pt-2 pb-3 flex flex-col space-y-0 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-on-surface-10">
-                      {entry.name || (allowAnonymous ? "익명" : "작성자")}
+                      {entry.name || "작성자"}
                     </span>
-                    <span className="text-[0.75em] text-on-surface-30">{entry.createdAt}</span>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        data-guestbook-menu-trigger="true"
+                        className="h-6 w-6 inline-flex items-center justify-center rounded-md text-on-surface-20 hover:bg-slate-100 hover:text-on-surface-10"
+                        onClick={() => setGuestbookMenuEntryId((prev) => (prev === entry.id ? null : entry.id))}
+                        aria-label="방명록 더보기"
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+                      {guestbookMenuEntryId === entry.id && (
+                        <div
+                          data-guestbook-menu-root="true"
+                          className="absolute right-0 mt-1 min-w-[84px] rounded-md border border-border bg-white shadow-sm z-10 overflow-hidden"
+                        >
+                          <button
+                            type="button"
+                            className="w-full h-8 px-3 text-left text-[12px] text-on-surface-20 hover:bg-slate-50"
+                            onClick={() => {
+                              const input = window.prompt("수정 비밀번호를 입력해 주세요.");
+                              if (!input || !canManageGuestbookEntry(entry, input)) {
+                                window.alert("비밀번호가 올바르지 않습니다.");
+                                setGuestbookMenuEntryId(null);
+                                return;
+                              }
+                              const nextMessage = window.prompt("수정할 내용을 입력해 주세요.", entry.message ?? "");
+                              if (nextMessage === null) {
+                                setGuestbookMenuEntryId(null);
+                                return;
+                              }
+                              const nextEntries = orderedEntries.map((it: any) =>
+                                it.id === entry.id ? { ...it, message: nextMessage } : it,
+                              );
+                              updateData("guestbook.entries", nextEntries);
+                              setGuestbookMenuEntryId(null);
+                            }}
+                          >
+                            수정
+                          </button>
+                          <button
+                            type="button"
+                            className="w-full h-8 px-3 text-left text-[12px] text-red-600 hover:bg-red-50"
+                            onClick={() => {
+                              const input = window.prompt("삭제 비밀번호를 입력해 주세요.");
+                              if (!input || !canManageGuestbookEntry(entry, input)) {
+                                window.alert("비밀번호가 올바르지 않습니다.");
+                                setGuestbookMenuEntryId(null);
+                                return;
+                              }
+                              const nextEntries = orderedEntries.filter((it: any) => it.id !== entry.id);
+                              updateData("guestbook.entries", nextEntries);
+                              setGuestbookMenuEntryId(null);
+                            }}
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <p className="whitespace-pre-line leading-relaxed text-on-surface-20">
                     {entry.isSecret ? "🔒 비밀글입니다." : entry.message}
@@ -2126,28 +2394,132 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
               ))}
             </div>
             {orderedEntries.length > perPage && (
-              <div className="pt-2 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-[15px]">
-                  {pageNumbers.map((num) => (
-                    <button
-                      key={`guestbook-page-${num}`}
-                      type="button"
-                      onClick={() => setGuestbookPreviewPage(num)}
-                      className={`${num === currentPage ? 'text-on-surface-10 font-semibold' : 'text-on-surface-30'}`}
-                    >
-                      {num}
-                    </button>
-                  ))}
-                </div>
+              <>
+                <Pagination className="m-0 w-full justify-start p-0">
+                  <PaginationContent className="w-full items-center">
+                    <PaginationItem className="shrink-0">
+                      <PaginationPrevious
+                        onClick={() => setGuestbookPreviewPage((p) => Math.max(1, p - 1))}
+                        disabled={currentPage <= 1}
+                      />
+                    </PaginationItem>
+                    <PaginationItem className="flex-1">
+                      <div className="flex items-center justify-center gap-1">
+                        {pageNumbers.map((num) => (
+                          <PaginationLink
+                            key={`guestbook-page-${num}`}
+                            isActive={num === currentPage}
+                            onClick={() => setGuestbookPreviewPage(num)}
+                          >
+                            {num}
+                          </PaginationLink>
+                        ))}
+                      </div>
+                    </PaginationItem>
+                    <PaginationItem className="shrink-0">
+                      <PaginationNext
+                        onClick={() => setGuestbookPreviewPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={currentPage >= totalPages}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
                 <Button
                   type="button"
                   variant="outline"
-                  className="rounded-lg px-4 h-10 text-[13px]"
+                  className="mt-5 mb-0 w-full rounded-lg px-4 h-10 text-[13px] border-transparent bg-[color:var(--primary-container)] text-[color:var(--on-primary-container)] hover:bg-[color:var(--primary-container)]/80 hover:text-[color:var(--on-primary-container)]"
+                  onClick={() => setGuestbookComposerOpen(true)}
                 >
                   축하메시지 남기기
                 </Button>
-              </div>
+              </>
             )}
+            {guestbookComposerOpen && previewFrameRef.current &&
+              createPortal(
+                <div
+                  className="absolute inset-0 z-40 bg-black/45 p-4 flex items-center justify-center"
+                  onMouseDown={(e) => {
+                    if (e.target === e.currentTarget) {
+                      closeGuestbookComposer();
+                    }
+                  }}
+                >
+                  <div className="w-full max-w-[360px] rounded-2xl border border-border bg-white p-4 space-y-3 shadow-xl">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[15px] font-semibold text-on-surface-10">축하메시지 남기기</p>
+                      <button
+                        type="button"
+                        className="h-8 w-8 inline-flex items-center justify-center rounded-md text-on-surface-30 hover:bg-slate-100 hover:text-on-surface-10"
+                        aria-label="닫기"
+                        onClick={closeGuestbookComposer}
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <Input
+                      value={guestbookDraftName}
+                      onChange={(e) => setGuestbookDraftName(e.target.value)}
+                      placeholder="이름"
+                      className="shadow-none"
+                    />
+                    <div className="space-y-1">
+                      <Textarea
+                        rows={4}
+                        maxLength={200}
+                        value={guestbookDraftMessage}
+                        onChange={(e) => setGuestbookDraftMessage(e.target.value.slice(0, 200))}
+                        placeholder="축하 메시지를 입력해 주세요."
+                        className="min-h-[200px] max-h-[400px] resize-none shadow-none"
+                      />
+                      <div className="text-[12px] text-on-surface-30 text-right">{draftMessageLength}/200</div>
+                    </div>
+                    <div className="space-y-1">
+                      <Input
+                        type="password"
+                        value={guestbookDraftPassword}
+                        onChange={(e) => setGuestbookDraftPassword(e.target.value)}
+                        placeholder="글 비밀번호"
+                        className="shadow-none"
+                      />
+                      <p className="text-[12px] text-on-surface-30 leading-relaxed text-right">
+                        수정/삭제 시 필요해요.
+                      </p>
+                    </div>
+                    <div className="pt-1 flex justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-9 px-4 text-[12px]"
+                        onClick={closeGuestbookComposer}
+                      >
+                        취소
+                      </Button>
+                      <Button
+                        type="button"
+                        className="h-9 px-4 text-[12px]"
+                        disabled={!guestbookDraftMessage.trim() || !guestbookDraftPassword.trim()}
+                        onClick={() => {
+                          const message = guestbookDraftMessage.trim();
+                          const password = guestbookDraftPassword.trim();
+                          if (!message || !password) return;
+                          const nextEntry = {
+                            id: `guestbook-${Date.now()}`,
+                            name: guestbookDraftName.trim(),
+                            message,
+                            password,
+                          };
+                          updateData("guestbook.entries", [nextEntry, ...orderedEntries]);
+                          setGuestbookPreviewPage(1);
+                          closeGuestbookComposer();
+                        }}
+                      >
+                        등록
+                      </Button>
+                    </div>
+                  </div>
+                </div>,
+                previewFrameRef.current
+              )}
             <div className="flex flex-wrap gap-2 text-[0.75em] text-on-surface-30">
               {hasPassword && <span>비밀번호 보호</span>}
             </div>
@@ -2163,7 +2535,6 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           : null;
         return (
           <div className="max-w-full mx-auto w-full space-y-3 text-[0.8125em] text-on-surface-20">
-            <p className="text-[0.75em] font-semibold tracking-[0.2em] text-on-surface-30">YOUTUBE</p>
             <p className="text-[0.875em] font-semibold text-on-surface-10">{title}</p>
             {embedUrl ? (
               <div className="w-full aspect-video rounded-xl overflow-hidden border border-border bg-black">
@@ -2191,7 +2562,6 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
         const thumb = data.share?.thumbnail?.trim() || "";
         return (
           <div className="max-w-full mx-auto w-full space-y-3 text-[0.8125em] text-on-surface-20">
-            <p className="text-[0.75em] font-semibold tracking-[0.2em] text-on-surface-30">SHARE</p>
             <div className="rounded-xl border border-border overflow-hidden bg-white text-left">
               {useThumbnail && (
                 <div className="h-36 w-full bg-[color:var(--surface-20)]">
@@ -2219,7 +2589,6 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
         ];
         return (
           <div className="max-w-full mx-auto w-full space-y-3 text-[0.8125em] text-on-surface-20">
-            <p className="text-[0.75em] font-semibold tracking-[0.2em] text-on-surface-30">PROTECT</p>
             <div className="rounded-xl border border-border bg-white text-left px-3 py-3 space-y-2">
               {items.map((it) => (
                 <div key={it.label} className="flex items-center justify-between">
@@ -2334,7 +2703,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           <div ref={editorScrollRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scroll-smooth no-scrollbar">
             <div
               className="p-4 flex-1 flex flex-col gap-4 [&>div]:p-0"
-              style={{ backgroundColor: data.style.bgColor || 'var(--surface-10)' }}
+              style={{ backgroundColor: 'var(--surface-10)' }}
             >
               {orderedItems.map((item, idx) => {
                 const isInitiallyExpanded = true;
@@ -2381,7 +2750,13 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                         <Switch
                           className="ml-2 flex-shrink-0"
                           checked={sectionEnabled[item.id] ?? false}
-                          onCheckedChange={(checked) => setSectionEnabled((prev) => ({ ...prev, [item.id]: checked }))}
+                          onCheckedChange={(checked) => {
+                            setSectionEnabled((prev) => ({ ...prev, [item.id]: checked }));
+                            if (checked) {
+                              setActiveSection(item.id);
+                              requestAnimationFrame(() => scrollPreviewToSection(item.id));
+                            }
+                          }}
                         />
                       )}
                     </div>
@@ -2402,6 +2777,30 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                       {/* 테마 섹션 */}
                       {item.id === 'theme' && (
                         <>
+                          {/* 대표 컬러 */}
+                          <FormItem label="테마컬러">
+                            {KEY_COLOR_PRESETS.map((preset) => {
+                              const isActive = ((data.theme as any)?.colorPreset ?? KEY_COLOR_PRESETS[0].id) === preset.id;
+                              return (
+                                <button
+                                  key={preset.id}
+                                  type="button"
+                                  onClick={() => updateData('theme.colorPreset', preset.id)}
+                                  className={`w-7 h-7 rounded-full transition-shadow flex items-center justify-center ${
+                                    isActive ? 'border-2 border-[color:var(--on-surface-10)]' : 'border border-[color:var(--border-10)]'
+                                  }`}
+                                  aria-label={preset.label}
+                                  title={preset.label}
+                                >
+                                  <span
+                                    className="w-6 h-6 rounded-full"
+                                    style={{ backgroundColor: preset.key }}
+                                  />
+                                </button>
+                              );
+                            })}
+                          </FormItem>
+
                           {/* 글꼴 선택 */}
                           <FormItem label="글꼴">
                             <div className="flex flex-wrap gap-2">
@@ -2447,35 +2846,6 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                           </FormItem>
 
                           <div className="w-full h-px bg-border/60" />
-
-                          {/* 배경 컬러 */}
-                          <FormItem label="배경 컬러">
-                            {[
-                              '#FFFFFF',
-                              '#F5F5F5',
-                              '#FFF8F5',
-                              '#FCFBF7',
-                              '#F5F8FA',
-                              '#F8F5FA',
-                            ].map((color) => {
-                              const isActive = data.style.bgColor === color;
-                              return (
-                                <button
-                                  key={color}
-                                  type="button"
-                                  onClick={() => updateData('style.bgColor', color)}
-                                  className={`w-7 h-7 rounded-full transition-shadow flex items-center justify-center ${
-                                      isActive ? 'border-2 border-[color:var(--on-surface-10)]' : 'border border-[color:var(--border-10)]'
-                                  }`}
-                                >
-                                  <span
-                                    className="w-6 h-6 rounded-full"
-                                    style={{ backgroundColor: color }}
-                                  />
-                                </button>
-                              );
-                            })}
-                          </FormItem>
 
                           {/* 파티클 효과 */}
                           <FormItem label="파티클 효과">
@@ -3700,6 +4070,21 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                                 className="resize-none shadow-none flex-1"
                               />
                             </FormItem>
+                            <FormItem label="표시 방식">
+                              <div className="flex flex-wrap gap-2">
+                                {([
+                                  { value: 'accordion', label: '접기/펼치기' },
+                                  { value: 'expanded', label: '전체 펼침' },
+                                ] as const).map((opt) => (
+                                  <OptionChip
+                                    key={opt.value}
+                                    label={opt.label}
+                                    active={(((data.accounts as any)?.displayMode ?? 'accordion') === opt.value)}
+                                    onClick={() => updateData('accounts.displayMode', opt.value)}
+                                  />
+                                ))}
+                              </div>
+                            </FormItem>
                           </div>
 
                           {/* 2. 계좌 리스트 */}
@@ -3774,7 +4159,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                                   />
                                 </FormItem>
 
-                                {/* 간편송금 / 계좌정보 보이기 */}
+                                {/* 접기/펼치기 모드에서 직접/간접 노출 제어 */}
                                 <FormItem label="옵션">
                                   <div className="flex flex-col gap-1 text-[13px] text-on-surface-20">
                                     <div className="flex items-center gap-2">
@@ -3786,7 +4171,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                                           updateData('accounts.list', next);
                                         }}
                                       />
-                                      <span>계좌정보 보이기</span>
+                                      <span>계좌 보이기</span>
                                     </div>
                                   </div>
                                 </FormItem>
@@ -4012,52 +4397,67 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                       {/* 안내사항 섹션 */}
                       {item.id === 'notice' && (
                         <>
-                          <FormItem label="제목">
-                            <Input
-                              value={(data.notice as any)?.title ?? ""}
-                              onChange={(e) => updateData('notice.title', e.target.value)}
-                              placeholder="안내사항"
-                              className="shadow-none flex-1"
-                            />
-                          </FormItem>
-                          <FormItem label="내용">
-                            <Textarea
-                              rows={4}
-                              value={(data.notice as any)?.content ?? ""}
-                              onChange={(e) => updateData('notice.content', e.target.value)}
-                              placeholder="하객 안내 문구를 입력해 주세요."
-                              className="resize-none shadow-none flex-1"
-                            />
-                          </FormItem>
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-10 inline-flex items-center cursor-pointer hover:bg-slate-50"
-                              onClick={async () => {
-                                const linkToCopy = ((data.share as any)?.link ?? '').trim() || window.location.href;
-                                try {
-                                  await navigator.clipboard.writeText(linkToCopy);
-                                } catch {
-                                  // ignore clipboard permission failures
-                                }
-                              }}
-                            >
-                              링크복사
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-10 inline-flex items-center cursor-pointer hover:bg-slate-50"
-                              onClick={() => {
-                                setNoticeSampleTab('general');
-                                setNoticeSelectedSample(null);
-                                setNoticeSampleOpen(true);
-                              }}
-                            >
-                              샘플보기
-                            </Button>
-                          </div>
+                          {noticeSections.map((section, idx) => (
+                            <React.Fragment key={section.id}>
+                              {idx > 0 && <div className="border-t border-dashed border-[color:var(--border-20)]" />}
+                              <div className="flex flex-col gap-5 mb-0">
+                                <FormItem label="제목">
+                                  <Input
+                                    value={section.title ?? ""}
+                                    onChange={(e) => {
+                                      const nextSections = noticeSections.map((it, sectionIdx) =>
+                                        sectionIdx === idx ? { ...it, title: e.target.value } : it,
+                                      );
+                                      updateNoticeSections(nextSections);
+                                    }}
+                                    placeholder="안내사항"
+                                    className="shadow-none flex-1"
+                                  />
+                                  {noticeSections.length > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const nextSections = noticeSections.filter((_, sectionIdx) => sectionIdx !== idx);
+                                        updateNoticeSections(nextSections);
+                                      }}
+                                      className="flex-shrink-0 text-[12px] text-on-surface-30 hover:text-on-surface-10 transition-colors"
+                                    >
+                                      삭제
+                                    </button>
+                                  )}
+                                </FormItem>
+                                <FormItem label="내용">
+                                  <Textarea
+                                    rows={4}
+                                    value={section.content ?? ""}
+                                    onChange={(e) => {
+                                      const nextSections = noticeSections.map((it, sectionIdx) =>
+                                        sectionIdx === idx ? { ...it, content: e.target.value } : it,
+                                      );
+                                      updateNoticeSections(nextSections);
+                                    }}
+                                    placeholder="하객 안내 문구를 입력해 주세요."
+                                    className="resize-none shadow-none flex-1"
+                                  />
+                                </FormItem>
+                                <div className="flex justify-end gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-10 inline-flex items-center cursor-pointer hover:bg-slate-50"
+                                    onClick={() => {
+                                      setNoticeEditorTabIndex(idx);
+                                      setNoticeSampleTab('general');
+                                      setNoticeSelectedSample(null);
+                                      setNoticeSampleOpen(true);
+                                    }}
+                                  >
+                                    샘플보기
+                                  </Button>
+                                </div>
+                              </div>
+                            </React.Fragment>
+                          ))}
 
                           {noticeSampleOpen && createPortal(
                             <div
@@ -4187,8 +4587,13 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                                     disabled={!noticeSelectedSample}
                                     onClick={() => {
                                       if (!noticeSelectedSample) return;
-                                      updateData('notice.title', noticeSelectedSample.title);
-                                      updateData('notice.content', noticeSelectedSample.content);
+                                      const targetIndex = Math.min(noticeEditorTabIndex, noticeSections.length - 1);
+                                      const nextSections = noticeSections.map((section, idx) =>
+                                        idx === targetIndex
+                                          ? { ...section, title: noticeSelectedSample.title, content: noticeSelectedSample.content }
+                                          : section,
+                                      );
+                                      updateNoticeSections(nextSections);
                                       setNoticeSampleOpen(false);
                                     }}
                                   >
@@ -4199,6 +4604,31 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                             </div>,
                             document.body
                           )}
+                          <div className="pt-0 flex justify-center">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="rounded-lg px-4 h-10 text-[13px]"
+                              disabled={noticeSections.length >= 3}
+                              onClick={() => {
+                                if (noticeSections.length >= 3) return;
+                                const nextIndex = noticeSections.length;
+                                const nextSections = [
+                                  ...noticeSections,
+                                  {
+                                    id: `notice-${Date.now()}`,
+                                    title: `안내 ${nextIndex + 1}`,
+                                    content: '',
+                                  },
+                                ];
+                                updateNoticeSections(nextSections);
+                                setNoticeEditorTabIndex(nextIndex);
+                                setNoticePreviewTabIndex(nextIndex);
+                              }}
+                            >
+                              + 추가하기
+                            </Button>
+                          </div>
                         </>
                       )}
 
@@ -4232,19 +4662,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                                 className="shadow-none flex-1"
                               />
                               <div className="text-[12px] text-on-surface-30">
-                                관리자 비밀번호를 사용하여 방명록 글을 강제로 삭제할 수 있습니다.
+                                관리자 비밀번호는 모든 글 관리용 마스터 비밀번호이며, 각 작성자는 글 비밀번호로 본인 글 수정/삭제를 할 수 있습니다.
                               </div>
-                            </div>
-                          </FormItem>
-                          <FormItem label="운영 옵션">
-                            <div className="flex-1 flex flex-col gap-2 text-[13px] text-on-surface-20">
-                              <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                                <CircleCheckbox
-                                  checked={!!(data.guestbook as any)?.allowAnonymous}
-                                  onChange={(e) => updateData('guestbook.allowAnonymous', e.target.checked)}
-                                />
-                                익명 작성 허용
-                              </label>
                             </div>
                           </FormItem>
                         </>
@@ -4377,7 +4796,22 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                               className="resize-none shadow-none flex-1"
                             />
                           </FormItem>
-                          <div className="flex justify-end">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-10 inline-flex items-center cursor-pointer hover:bg-slate-50"
+                              onClick={async () => {
+                                const linkToCopy = ((data.share as any)?.link ?? '').trim() || window.location.href;
+                                try {
+                                  await navigator.clipboard.writeText(linkToCopy);
+                                } catch {
+                                  // ignore clipboard permission failures
+                                }
+                              }}
+                            >
+                              링크복사
+                            </Button>
                             <Button
                               type="button"
                               variant="outline"
@@ -4499,12 +4933,18 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           {/* 바깥 컨테이너는 고정, 내부 프레임만 스크롤 */}
           <div className="flex-1 min-h-0 flex justify-center w-full max-w-[400px] min-h-full bg-transparent items-stretch shadow-none">
             <div
+              ref={previewFrameRef}
               className="w-full border border-border rounded-lg bg-white flex flex-col items-stretch text-center overflow-hidden relative"
               style={{
                 // 향후 theme.bgColor / theme.fontFamily를 전역 테마로 사용
-                backgroundColor: data.style.bgColor,
+                backgroundColor: selectedKeyColorPreset.background,
                 fontFamily: data.theme.fontFamily,
                 fontSize: `${fontScaleToPercent((data.theme as any).fontScale)}%`,
+                '--primary-custom': selectedKeyColorPreset.key,
+                '--key': selectedKeyColorPreset.key,
+                '--key-dark': selectedKeyColorPreset.keyDark,
+                '--primary-container': selectedKeyColorPreset.primaryContainer,
+                '--on-primary-container': selectedKeyColorPreset.onPrimaryContainer,
               }}
             >
               <div ref={previewScrollRef} className="flex-1 overflow-y-auto no-scrollbar">

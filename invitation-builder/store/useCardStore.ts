@@ -94,6 +94,7 @@ export interface CardData {
   accounts: {
     title: string;
     content: string;
+    displayMode?: 'accordion' | 'expanded';
     list: AccountItem[];
   };
   gallery: {
@@ -114,6 +115,7 @@ export interface CardData {
       name: string;
       message: string;
       createdAt: string;
+      password?: string;
       isSecret: boolean;
     }>;
   };
@@ -130,6 +132,94 @@ export interface CardData {
   protect: { preventCapture: boolean; preventZoom: boolean; preventDownload: boolean };
   sectionEnabled: Record<string, boolean>;
 }
+
+const DEFAULT_GUESTBOOK_ENTRIES: CardData['guestbook']['entries'] = [
+  {
+    id: 'gb-1',
+    name: '이하늘',
+    message: '두 분의 결혼을 진심으로 축하드립니다. 오래오래 행복하세요!',
+    createdAt: '2026.03.15 10:20',
+    password: '1111',
+    isSecret: false,
+  },
+  {
+    id: 'gb-2',
+    name: '김서윤',
+    message: '예쁜 날, 예쁜 마음으로 축하드려요. 직접 가서 축하할게요!',
+    createdAt: '2026.03.15 14:02',
+    password: '1111',
+    isSecret: false,
+  },
+  {
+    id: 'gb-3',
+    name: '박지훈',
+    message: '두 분의 시작을 축복합니다. 늘 건강하고 행복하세요!',
+    createdAt: '2026.03.16 09:41',
+    password: '1111',
+    isSecret: false,
+  },
+  {
+    id: 'gb-4',
+    name: '최유진',
+    message: '결혼 진심으로 축하드려요. 예쁜 추억 많이 만드세요!',
+    createdAt: '2026.03.16 11:08',
+    password: '1111',
+    isSecret: false,
+  },
+  {
+    id: 'gb-5',
+    name: '정다은',
+    message: '서로 아끼며 오래오래 행복한 가정 이루시길 바랍니다.',
+    createdAt: '2026.03.16 13:55',
+    password: '1111',
+    isSecret: false,
+  },
+  {
+    id: 'gb-6',
+    name: '오민석',
+    message: '인생의 가장 빛나는 날, 함께 축하할 수 있어 기쁩니다!',
+    createdAt: '2026.03.16 16:22',
+    password: '1111',
+    isSecret: false,
+  },
+  {
+    id: 'gb-7',
+    name: '한지민',
+    message: '두 분의 앞날에 사랑과 웃음이 가득하길 기원합니다.',
+    createdAt: '2026.03.17 10:03',
+    password: '1111',
+    isSecret: false,
+  },
+  {
+    id: 'gb-8',
+    name: '강서준',
+    message: '행복한 결혼생활 되세요. 좋은 일만 가득하길 바랍니다!',
+    createdAt: '2026.03.17 12:47',
+    password: '1111',
+    isSecret: false,
+  },
+];
+
+const TOTAL_GUESTBOOK_ENTRY_COUNT = 50;
+const generatedGuestbookEntries: CardData['guestbook']['entries'] = Array.from(
+  { length: Math.max(0, TOTAL_GUESTBOOK_ENTRY_COUNT - DEFAULT_GUESTBOOK_ENTRIES.length) },
+  (_, index) => {
+    const idNum = DEFAULT_GUESTBOOK_ENTRIES.length + index + 1;
+    return {
+      id: `gb-${idNum}`,
+      name: `하객${idNum}`,
+      message: '결혼 진심으로 축하드립니다. 두 분의 앞날에 행복이 가득하길 바랍니다!',
+      createdAt: '2026.03.18 09:00',
+      password: '1111',
+      isSecret: false,
+    };
+  }
+);
+
+const INITIAL_GUESTBOOK_ENTRIES: CardData['guestbook']['entries'] = [
+  ...DEFAULT_GUESTBOOK_ENTRIES,
+  ...generatedGuestbookEntries,
+];
 
 // --- 3. 스토어 인터페이스 ---
 interface CardStore {
@@ -195,6 +285,7 @@ export const useCardStore = create<CardStore>((set) => ({
     accounts: {
       title: '마음 전하실 곳',
       content: '',
+      displayMode: 'accordion',
       list: [
         {
           id: 'groom-1',
@@ -224,22 +315,7 @@ export const useCardStore = create<CardStore>((set) => ({
       password: '',
       allowAnonymous: true,
       requireApproval: false,
-      entries: [
-        {
-          id: 'gb-1',
-          name: '이하늘',
-          message: '두 분의 결혼을 진심으로 축하드립니다. 오래오래 행복하세요!',
-          createdAt: '2026.03.15 10:20',
-          isSecret: false,
-        },
-        {
-          id: 'gb-2',
-          name: '김서윤',
-          message: '예쁜 날, 예쁜 마음으로 축하드려요. 직접 가서 축하할게요!',
-          createdAt: '2026.03.15 14:02',
-          isSecret: false,
-        },
-      ],
+      entries: INITIAL_GUESTBOOK_ENTRIES,
     },
     youtube: { isOn: false, title: '영상으로 전하는 마음', url: '', isLoop: false },
     share: {
