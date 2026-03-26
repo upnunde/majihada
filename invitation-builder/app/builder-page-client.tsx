@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Palette, Music, Image as ImageIcon, Users, MessageSquare, MessageCircle, Phone, CalendarHeart, MapPin, Bell, Images, Wallet, BookOpen, Youtube, Share2, Shield, CheckCircle2, GripVertical, Play, Pause, VolumeX, Volume2, X, ChevronDown, ChevronLeft, ChevronRight, MoreVertical, Pencil, Trash2, RotateCw, RefreshCcw, Move, ArrowUpDown } from 'lucide-react';
+import { Palette, Music, Image as ImageIcon, Users, MessageSquare, MessageCircle, Phone, CalendarHeart, MapPin, Bell, Images, Wallet, BookOpen, Youtube, Share2, Shield, CheckCircle2, GripVertical, Play, Pause, VolumeX, Volume2, X, ChevronDown, ChevronLeft, ChevronRight, MoreVertical, Pencil, Trash2, RotateCw, RefreshCcw, Move, ArrowUpDown, ClipboardCheck, Calendar, Languages } from 'lucide-react';
 
 const DEFAULT_LOCATION_PREVIEW_COORDS = { lat: 37.579617, lon: 126.977041 }; // 경복궁
 
@@ -213,6 +213,7 @@ import { useCardStore } from "../store/useCardStore";
 import { useSortable } from "@/lib/useSortable";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import GuestPhotoUploadForm from "@/components/GuestPhotoUploadForm";
+import AddressSearchDialog from "@/components/AddressSearchDialog";
 import ParticleCanvasOverlay from "@/components/ParticleCanvasOverlay";
 
 declare global {
@@ -410,7 +411,10 @@ function Input(props: React.ComponentProps<typeof RawInput>) {
   );
 }
 
-// 기획안 기반 14개 카테고리 (필수/선택 분리)
+/** 하단 '옵션' 그룹(콘텐츠 순서/미리보기 본문에 포함하지 않음) */
+const OTHER_OPTION_IDS = ['share', 'protect', 'publish', 'i18n'] as const;
+
+// 기획안 기반 카테고리 (필수/선택 분리)
 const sidebarItems = [
   // 필수 사항
   { id: 'theme', icon: Palette, label: '테마', category: '필수' },
@@ -425,13 +429,14 @@ const sidebarItems = [
   { id: 'gallery', icon: Images, label: '갤러리', category: '선택', hasSwitch: true },
   { id: 'account', icon: Wallet, label: '계좌정보', category: '선택', hasSwitch: true },
   { id: 'guestbook', icon: BookOpen, label: '방명록', category: '선택', hasSwitch: true },
+  { id: 'rsvp', icon: ClipboardCheck, label: '참석여부', category: '선택', hasSwitch: true },
   { id: 'youtube', icon: Youtube, label: '영상', category: '선택', hasSwitch: true },
   { id: 'guestUpload', icon: Images, label: '하객사진 받기', category: '선택', hasSwitch: true },
   { id: 'share', icon: Share2, label: '공유', category: '선택' },
   { id: 'protect', icon: Shield, label: '보호', category: '선택' },
+  { id: 'publish', icon: Calendar, label: '청첩장 공개', category: '선택', hasSwitch: true },
+  { id: 'i18n', icon: Languages, label: '다국어', category: '선택' },
 ];
-
-const OTHER_OPTION_IDS = ['share', 'protect'] as const;
 
 const builtInTracks = [
   // NOTE: 샘플 내장 음원(스트리밍 URL). 필요하면 추후 public/로 옮겨서 로컬 제공 가능.
@@ -800,12 +805,18 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   const [noticeEditorTabIndex, setNoticeEditorTabIndex] = useState(0);
   const [noticePreviewTabIndex, setNoticePreviewTabIndex] = useState(0);
   const [locationSearchOpen, setLocationSearchOpen] = useState(false);
-  const [locationSearchQuery, setLocationSearchQuery] = useState('');
-  const [locationSearchSelected, setLocationSearchSelected] = useState<string | null>(null);
+  // 사용자가 검색어(키워드)를 입력하는 로컬 상태
+  // 최종 주소 확정은 모달에서 '적용'을 눌렀을 때만 updateData('location.address', ...)로 반영
+  const [locationAddressKeyword, setLocationAddressKeyword] = useState('');
   const [locationPreviewCoords, setLocationPreviewCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [locationPreviewLoading, setLocationPreviewLoading] = useState(false);
   const [naverPreviewFailed, setNaverPreviewFailed] = useState(false);
   const [previewVisibleSections, setPreviewVisibleSections] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (locationSearchOpen) return;
+    setLocationAddressKeyword((data.location as any)?.address ?? '');
+  }, [data.location, locationSearchOpen]);
   const [sharePreviewOpen, setSharePreviewOpen] = useState(false);
   const [shareThumbnailPickerOpen, setShareThumbnailPickerOpen] = useState(false);
   const [galleryDetailOpen, setGalleryDetailOpen] = useState(false);
@@ -1085,20 +1096,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   const galleryDetailRatioClass =
     ((data.gallery as any)?.imageRatio ?? 'portrait') === 'square' ? 'aspect-square' : 'aspect-[3/4]';
 
-  const locationSearchResults = useMemo(() => {
-    const all = [
-      '서울 중구 동호로 249 (신라호텔)',
-      '서울 강남구 테헤란로 152 (역삼동)',
-      '서울 서초구 반포대로 222 (서초동)',
-      '서울 송파구 올림픽로 300 (잠실)',
-      '서울 용산구 한강대로 405 (용산역)',
-      '서울 마포구 월드컵북로 400 (상암)',
-      '서울 종로구 세종대로 175 (광화문)',
-    ];
-    const q = locationSearchQuery.trim();
-    if (!q) return all;
-    return all.filter((a) => a.includes(q));
-  }, [locationSearchQuery]);
+  // 주소 검색 모달 로직은 AddressSearchDialog로 분리
 
   const greetingSamples = useMemo(() => {
     return {
@@ -1761,7 +1759,14 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
     ...baseLayoutOrder,
     ...orderedContentOptionalItems
       .map((i) => i.id)
-      .filter((id) => isSectionEnabled(id) && id !== "share" && id !== "protect"),
+      .filter(
+        (id) =>
+          isSectionEnabled(id) &&
+          id !== "share" &&
+          id !== "protect" &&
+          id !== "publish" &&
+          id !== "i18n",
+      ),
   ];
   const orderedItems = [...requiredItems, ...orderedContentOptionalItems, ...otherOptionItems];
 
@@ -2725,14 +2730,6 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                   <div className="w-full max-w-[360px] rounded-2xl border border-border bg-white p-4 space-y-3 shadow-xl">
                     <div className="flex items-center justify-between">
                       <p className="text-[15px] font-semibold text-on-surface-10">축하메시지 남기기</p>
-                      <button
-                        type="button"
-                        className="h-8 w-8 inline-flex items-center justify-center rounded-md text-on-surface-30 hover:bg-slate-100 hover:text-on-surface-10"
-                        aria-label="닫기"
-                        onClick={closeGuestbookComposer}
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
                     </div>
                     <Input
                       value={guestbookDraftName}
@@ -2851,6 +2848,43 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           </div>
         );
       }
+      case 'rsvp': {
+        const r = (data as any).rsvp ?? {};
+        const title = (r.title ?? "참석 여부") as string;
+        const description = (r.description ?? "") as string;
+        const collectGuestCount = !!r.collectGuestCount;
+        const deadline = String(r.deadline ?? "").trim();
+        return (
+          <div className="max-w-full mx-auto w-full space-y-3 text-[0.8125em] text-on-surface-20 text-left">
+            <p className="text-[0.875em] font-semibold text-on-surface-10 text-center">{title}</p>
+            {description ? <p className="whitespace-pre-line leading-relaxed text-center">{description}</p> : null}
+            {deadline ? (
+              <p className="text-[12px] text-on-surface-30 text-center">응답 마감: {deadline}</p>
+            ) : null}
+            <div className="rounded-xl border border-border bg-white p-3 space-y-3">
+              <div className="flex gap-2 justify-center">
+                <span className="h-9 px-4 rounded-lg bg-[color:var(--key)] text-white text-[13px] font-medium inline-flex items-center justify-center">
+                  참석
+                </span>
+                <span className="h-9 px-4 rounded-lg border border-border bg-white text-[13px] text-on-surface-20 inline-flex items-center justify-center">
+                  불참
+                </span>
+              </div>
+              <div className="h-10 w-full rounded-lg border border-border bg-[color:var(--surface-10)] px-2.5 flex items-center text-[13px] text-on-surface-30">
+                이름
+              </div>
+              {collectGuestCount && (
+                <div className="h-10 w-full rounded-lg border border-border bg-[color:var(--surface-10)] px-2.5 flex items-center text-[13px] text-on-surface-30">
+                  동반 인원 (본인 제외)
+                </div>
+              )}
+              <p className="text-[11px] text-on-surface-30 text-center leading-relaxed">
+                미리보기 화면입니다. 실제 응답 수집은 발행 후 하객용 링크에서 진행됩니다.
+              </p>
+            </div>
+          </div>
+        );
+      }
       case 'guestUpload': {
         const title = ((data.guestUpload as any)?.title ?? "하객사진 받기") as string;
         const description = ((data.guestUpload as any)?.description ?? "예식 후 촬영하신 사진/영상을 업로드해 주세요.") as string;
@@ -2919,11 +2953,20 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
       
       {/* 상단 헤더 */}
       <header className="w-full flex-shrink-0 bg-white border-b border-border z-30">
-        <div className="h-16 flex items-center justify-between px-6">
+            <div className="h-16 flex items-center justify-between px-6">
           <div className="flex items-center gap-2">
-            <span className="text-xl font-extrabold tracking-tighter text-on-surface-10">majihada</span>
+            <span className="text-xl font-extrabold tracking-tighter text-on-surface-10">ondaham</span>
           </div>
-          <button className="bg-[color:var(--key)] text-white text-sm font-bold px-5 py-2 rounded-lg hover:bg-[color:var(--key-dark)] transition-colors shadow-none">
+          <button
+            type="button"
+            className="bg-[color:var(--key)] text-white text-sm font-bold px-5 py-2 rounded-lg hover:bg-[color:var(--key-dark)] transition-colors shadow-none"
+            onClick={() => {
+              updateData("billing.savedAt", new Date().toISOString());
+              window.alert(
+                "저장되었습니다.\n\n마이페이지에서 제작한 청첩장 목록을 확인할 수 있어요.\n실제 하객 공개·링크 활용은 결제 완료 후 가능하며, 결제 전 미리보기에는 워터마크가 표시됩니다.",
+              );
+            }}
+          >
             저장하기
           </button>
         </div>
@@ -4031,14 +4074,6 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                               >
                                 <div className="flex items-center justify-between">
                                   <h3 className="text-[15px] font-semibold text-on-surface-10">샘플 문구</h3>
-                                  <button
-                                    type="button"
-                                    onClick={() => setGreetingSampleOpen(false)}
-                                    className="p-1 rounded-full hover:bg-slate-100 text-on-surface-30 hover:text-on-surface-10"
-                                    aria-label="닫기"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
                                 </div>
 
                                 <div className="relative">
@@ -4177,18 +4212,16 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                             <FormItem label="주소">
                               <div className="flex flex-1 gap-2">
                                 <Input
-                                  value={data.location.address}
-                                  disabled
-                                  className="shadow-none flex-1 cursor-not-allowed select-none pointer-events-none"
-                                  placeholder="검색버튼을 통해 주소를 추가해주세요"
+                                  value={locationAddressKeyword}
+                                  onChange={(e) => setLocationAddressKeyword(e.target.value)}
+                                  className="shadow-none flex-1"
+                                  placeholder="도로명/지번/건물명 입력"
                                 />
                                 <Button
                                   type="button"
                                   variant="outline"
                                   className="h-10 px-3 rounded-lg text-[13px] flex-shrink-0 border-[color:var(--border-30)] bg-white text-on-surface-20 hover:bg-slate-50 hover:text-on-surface-10"
                                   onClick={() => {
-                                    setLocationSearchQuery('');
-                                    setLocationSearchSelected(null);
                                     setLocationSearchOpen(true);
                                   }}
                                 >
@@ -4260,84 +4293,15 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                             )}
                           </div>
 
-                          {locationSearchOpen && createPortal(
-                            <div
-                              className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
-                              onClick={() => setLocationSearchOpen(false)}
-                            >
-                              <div
-                                className="w-full max-w-md rounded-2xl bg-white border border-[color:var(--border-10)] p-6 flex flex-col gap-5 h-[min(680px,calc(100vh-48px))] overflow-hidden"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <h3 className="text-[15px] font-semibold text-on-surface-10">주소 검색</h3>
-                                  <button
-                                    type="button"
-                                    onClick={() => setLocationSearchOpen(false)}
-                                    className="p-1 rounded-full hover:bg-slate-100 text-on-surface-30 hover:text-on-surface-10"
-                                    aria-label="닫기"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </div>
-
-                                <div className="relative">
-                                  <Input
-                                    value={locationSearchQuery}
-                                    onChange={(e) => setLocationSearchQuery(e.target.value)}
-                                    placeholder="도로명/지번/건물명으로 검색"
-                                    className="pl-9 pr-3 text-[13px] h-10 bg-[color:var(--surface-10)]"
-                                  />
-                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-30">
-                                    🔍
-                                  </span>
-                                </div>
-
-                                <div className="flex-1 overflow-y-auto no-scrollbar">
-                                  <div className="flex flex-col">
-                                    {locationSearchResults.map((addr) => (
-                                      <button
-                                        key={addr}
-                                        type="button"
-                                        onClick={() => {
-                                          setLocationSearchSelected(addr);
-                                        }}
-                                        className={[
-                                          'px-3 py-3 text-left text-[13px] rounded-lg border transition-colors',
-                                          locationSearchSelected === addr
-                                            ? 'bg-slate-50 border-black/20 text-on-surface-10'
-                                            : 'bg-transparent border-transparent text-on-surface-20 hover:bg-slate-50',
-                                        ].join(' ')}
-                                      >
-                                        {addr}
-                                      </button>
-                                    ))}
-                                    {locationSearchResults.length === 0 && (
-                                      <div className="px-3 py-6 text-center text-[13px] text-on-surface-30">
-                                        검색 결과가 없어요.
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-
-                                <div className="pt-0 flex justify-end">
-                                  <Button
-                                    type="button"
-                                    className="w-fit h-11 px-5 rounded-lg text-[14px] font-semibold"
-                                    disabled={!locationSearchSelected}
-                                    onClick={() => {
-                                      if (!locationSearchSelected) return;
-                                      updateData('location.address', locationSearchSelected);
-                                      setLocationSearchOpen(false);
-                                    }}
-                                  >
-                                    적용
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>,
-                            document.body
-                          )}
+                          <AddressSearchDialog
+                            open={locationSearchOpen}
+                            onOpenChange={setLocationSearchOpen}
+                            initialQuery={locationAddressKeyword.trim()}
+                            onSelectAddress={(addr) => {
+                              updateData("location.address", addr);
+                              setLocationAddressKeyword(addr);
+                            }}
+                          />
                         </>
                       )}
 
@@ -4493,14 +4457,6 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                               <div className="w-full max-w-md rounded-2xl bg-white border border-[color:var(--border-10)] p-6 flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center justify-between">
                                   <h3 className="text-[15px] font-semibold text-on-surface-10">은행선택</h3>
-                                  <button
-                                    type="button"
-                                    onClick={() => setBankModalIndex(null)}
-                                    className="p-1 rounded-full hover:bg-slate-100 text-on-surface-30 hover:text-on-surface-10"
-                                    aria-label="닫기"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
                                 </div>
 
                                 <div className="w-full">
@@ -4539,6 +4495,17 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                                       </button>
                                     ))}
                                   </div>
+                                </div>
+
+                                <div className="pt-0 flex justify-end">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="w-fit h-10 px-5 rounded-lg text-[14px] font-semibold border-[color:var(--border-30)] bg-white text-on-surface-20 hover:bg-slate-50 hover:text-on-surface-10"
+                                    onClick={() => setBankModalIndex(null)}
+                                  >
+                                    닫기
+                                  </Button>
                                 </div>
                               </div>
                             </div>,
@@ -4767,14 +4734,6 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                               >
                                 <div className="flex items-center justify-between">
                                   <h3 className="text-[15px] font-semibold text-on-surface-10">샘플 문구</h3>
-                                  <button
-                                    type="button"
-                                    onClick={() => setNoticeSampleOpen(false)}
-                                    className="p-1 rounded-full hover:bg-slate-100 text-on-surface-30 hover:text-on-surface-10"
-                                    aria-label="닫기"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
                                 </div>
 
                                 <div className="relative">
@@ -5071,6 +5030,65 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                         </>
                       )}
 
+                      {item.id === 'rsvp' && (
+                        <>
+                          <FormItem label="제목">
+                            <Input
+                              value={(data as any).rsvp?.title ?? ""}
+                              onChange={(e) => updateData("rsvp.title", e.target.value)}
+                              placeholder="참석 여부"
+                              className="shadow-none flex-1"
+                            />
+                          </FormItem>
+                          <FormItem label="안내 문구">
+                            <Textarea
+                              rows={3}
+                              value={(data as any).rsvp?.description ?? ""}
+                              onChange={(e) => updateData("rsvp.description", e.target.value)}
+                              placeholder="참석 여부를 알려주시면 준비에 도움이 됩니다."
+                              className="resize-none shadow-none flex-1"
+                            />
+                          </FormItem>
+                          <FormItem label="옵션">
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              className="inline-flex items-center gap-2 text-[13px] text-on-surface-20 select-none cursor-pointer"
+                              onClick={() =>
+                                updateData("rsvp.collectGuestCount", !((data as any).rsvp?.collectGuestCount ?? true))
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  updateData(
+                                    "rsvp.collectGuestCount",
+                                    !((data as any).rsvp?.collectGuestCount ?? true),
+                                  );
+                                }
+                              }}
+                            >
+                              <CircleCheckbox
+                                checked={!!((data as any).rsvp?.collectGuestCount ?? true)}
+                                onChange={(e) => updateData("rsvp.collectGuestCount", e.target.checked)}
+                              />
+                              동반 인원 수 받기
+                            </span>
+                          </FormItem>
+                          <FormItem label="응답 마감일">
+                            <div className="flex-1 flex flex-col gap-2">
+                              <Input
+                                type="date"
+                                value={(data as any).rsvp?.deadline ?? ""}
+                                onChange={(e) => updateData("rsvp.deadline", e.target.value)}
+                                className="shadow-none max-w-[240px]"
+                              />
+                              <div className="text-[12px] text-on-surface-30 leading-relaxed">
+                                비워 두면 마감일 없이 받습니다.
+                              </div>
+                            </div>
+                          </FormItem>
+                        </>
+                      )}
+
                       {item.id === 'guestUpload' && (
                         <>
                           <FormItem label="제목">
@@ -5318,8 +5336,55 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                         </>
                       )}
 
+                      {item.id === "publish" && (
+                        <>
+                          <FormItem label="청첩장 공개일">
+                            <div className="flex-1 flex flex-col gap-2">
+                              <Input
+                                type="date"
+                                value={(data as any).publish?.publicStartDate ?? ""}
+                                onChange={(e) => updateData("publish.publicStartDate", e.target.value)}
+                                className="shadow-none max-w-[240px]"
+                              />
+                              <div className="text-[12px] text-on-surface-30 leading-relaxed">
+                                설정한 날짜 0시부터 공개돼요.
+                              </div>
+                            </div>
+                          </FormItem>
+                        </>
+                      )}
+
+                      {item.id === "i18n" && (
+                        <>
+                          <FormItem label="옵션">
+                            <div className="flex flex-col gap-2 flex-1">
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                className="inline-flex items-center gap-2 text-[13px] text-on-surface-20 select-none cursor-pointer"
+                                onClick={() => updateData("i18n.enabled", !((data as any).i18n?.enabled ?? false))}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    updateData("i18n.enabled", !((data as any).i18n?.enabled ?? false));
+                                  }
+                                }}
+                              >
+                                <CircleCheckbox
+                                  checked={!!(data as any).i18n?.enabled}
+                                  onChange={(e) => updateData("i18n.enabled", e.target.checked)}
+                                />
+                                다국어 지원설정
+                              </span>
+                              <div className="text-[12px] text-on-surface-30 leading-relaxed">
+                                기본 제공 국가: 대한민국, 미국, 일본, 중국(간체), 대만(번체), 베트남, 태국. (추가/삭제 불가)
+                              </div>
+                            </div>
+                          </FormItem>
+                        </>
+                      )}
+
                       {/* 아직 구체화되지 않은 나머지 섹션들의 플레이스홀더 */}
-                      {!['theme', 'bgm', 'main', 'hosts', 'eventInfo', 'greeting', 'account', 'location', 'gallery', 'notice', 'guestbook', 'youtube', 'guestUpload', 'share', 'protect'].includes(item.id) && (
+                      {!['theme', 'bgm', 'main', 'hosts', 'eventInfo', 'greeting', 'account', 'location', 'gallery', 'notice', 'guestbook', 'rsvp', 'youtube', 'guestUpload', 'share', 'protect', 'publish', 'i18n'].includes(item.id) && (
                         <div className="h-20 flex items-center justify-center text-on-surface-30 text-sm bg-slate-50 rounded-lg border border-dashed border-border">
                           {item.label} 세부 입력 폼이 조립될 영역입니다.
                         </div>
@@ -5389,6 +5454,23 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
               }
             >
               <ParticleCanvasOverlay effect={(data.theme as any)?.particleEffect ?? 'none'} />
+              {!((data as any).billing?.isPaid) && (
+                <div
+                  className="absolute inset-0 z-[15] pointer-events-none overflow-hidden"
+                  aria-hidden
+                >
+                  <div className="absolute inset-0 flex flex-wrap items-center justify-center gap-16 p-6 opacity-[0.12]">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <span
+                        key={i}
+                        className="rotate-[-24deg] text-[clamp(14px,4vw,22px)] font-black text-on-surface-10 whitespace-nowrap select-none"
+                      >
+                        SAMPLE · 미리보기
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div ref={previewScrollRef} className="flex-1 overflow-y-auto no-scrollbar">
                 {layoutOrder.map((sectionId) => (
                   <div

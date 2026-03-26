@@ -144,6 +144,21 @@ export interface CardData {
     enableKakao: boolean;
   };
   protect: { preventCapture: boolean; preventZoom: boolean; preventDownload: boolean };
+  /** 참석 여부(RSVP) — 섹션 ON/OFF는 `sectionEnabled.rsvp` */
+  rsvp: {
+    title: string;
+    description: string;
+    /** 동반 인원 수 입력 받기 */
+    collectGuestCount: boolean;
+    /** 마감일(YYYY-MM-DD, 비우면 제한 없음) */
+    deadline: string;
+  };
+  /** 청첩장 공개 설정 */
+  publish: { publicStartDate: string };
+  /** 영문 등 다국어 노출(추후 콘텐츠 연동) */
+  i18n: { enabled: boolean };
+  /** 결제·저장 메타(마이페이지·워터마크 등과 연동 예정) */
+  billing: { isPaid: boolean; savedAt?: string };
   sectionEnabled: Record<string, boolean>;
 }
 
@@ -349,6 +364,21 @@ export const useCardStore = create<CardStore>((set) => ({
       enableKakao: true,
     },
     protect: { preventCapture: false, preventZoom: false, preventDownload: false },
+    rsvp: {
+      title: '참석 여부',
+      description: '참석 여부를 알려주시면 준비에 큰 도움이 됩니다.',
+      collectGuestCount: true,
+      deadline: '',
+    },
+    publish: {
+      publicStartDate: '',
+    },
+    i18n: {
+      enabled: false,
+    },
+    billing: {
+      isPaid: false,
+    },
     sectionEnabled: {},
   },
 
