@@ -460,7 +460,7 @@ const sidebarItems = [
   { id: 'guestUpload', icon: Images, label: '하객사진 받기', category: '선택', hasSwitch: true },
   { id: 'share', icon: Share2, label: '공유', category: '선택' },
   { id: 'protect', icon: Shield, label: '보호', category: '선택' },
-  { id: 'publish', icon: Calendar, label: '청첩장 공개', category: '선택', hasSwitch: true },
+  { id: 'publish', icon: Calendar, label: '공개일 설정', category: '선택', hasSwitch: true },
   { id: 'i18n', icon: Languages, label: '다국어', category: '선택' },
 ];
 
@@ -557,10 +557,16 @@ function FormItem({ label, children }: { label: string; children: React.ReactNod
   );
 }
 
+const BRIDE_RELATION_OPTIONS = ['딸', '장녀', '차녀', '삼녀', '사녀', '오녀', '육녀', '독녀', '막내', '조카', '손녀', '동생', '외동'] as const;
+const GROOM_RELATION_OPTIONS = ['아들', '장남', '차남', '삼남', '사남', '오남', '육남', '독남', '막내', '조카', '손자', '동생', '외동'] as const;
+
 function HostContactField({
   label,
   nameValue,
   onNameChange,
+  relationValue,
+  onRelationChange,
+  relationOptions,
   phoneValue,
   onPhoneChange,
   showPhone,
@@ -571,6 +577,9 @@ function HostContactField({
   label: string;
   nameValue: string;
   onNameChange: (value: string) => void;
+  relationValue?: string;
+  onRelationChange?: (value: string) => void;
+  relationOptions?: readonly string[];
   phoneValue?: string;
   onPhoneChange?: (value: string) => void;
   showPhone: boolean;
@@ -598,12 +607,32 @@ function HostContactField({
             />
           </div>
         ) : (
-          <Input
-            placeholder="이름"
-            value={nameValue}
-            onChange={(e) => onNameChange(e.target.value)}
-            className="flex-1 shadow-none"
-          />
+          <div className="flex items-center gap-2 w-full">
+            <Input
+              placeholder="이름"
+              value={nameValue}
+              onChange={(e) => onNameChange(e.target.value)}
+              className="flex-1 shadow-none"
+            />
+            {!!relationOptions?.length && !!onRelationChange && (
+              <div className="relative w-[80px] min-w-[80px] max-w-[100px]">
+                <select
+                  value={relationValue ?? ''}
+                  onChange={(e) => onRelationChange(e.target.value)}
+                  className="h-10 w-full min-w-0 rounded-lg border border-input bg-white px-3 py-1 text-[13px] text-on-surface-20 appearance-none transition-colors outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50"
+                >
+                  {relationOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+                <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
+                  <ChevronDown className="w-4 h-4 text-on-surface-30" />
+                </span>
+              </div>
+            )}
+          </div>
         )}
 
         {showPhone && !!onPhoneChange && (
@@ -927,6 +956,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   }, [data.location, locationSearchOpen]);
   const [sharePreviewOpen, setSharePreviewOpen] = useState(false);
   const [shareThumbnailPickerOpen, setShareThumbnailPickerOpen] = useState(false);
+  const [greetingThumbnailPickerOpen, setGreetingThumbnailPickerOpen] = useState(false);
   const [galleryDetailOpen, setGalleryDetailOpen] = useState(false);
   const [galleryDetailIndex, setGalleryDetailIndex] = useState(0);
   const previewScrollRef = useRef<HTMLDivElement | null>(null);
@@ -1007,6 +1037,17 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
       url: p.id === 'flower' ? '/chrysanthemum.svg' : makeDataUri(makeBase(p.bg1, p.bg2, p.icon)),
     }));
   }, []);
+
+  const flowerThumbnailPresets = useMemo(
+    () => [
+      { id: 'flower01', label: '꽃 1', url: '/flower01.svg' },
+      { id: 'flower02', label: '꽃 2', url: '/flower02.svg' },
+      { id: 'flower03', label: '꽃 3', url: '/flower03.svg' },
+      { id: 'flower04', label: '꽃 4', url: '/flower04.svg' },
+      { id: 'flower05', label: '꽃 5', url: '/flower05.svg' },
+    ],
+    [],
+  );
 
   useEffect(() => {
     setNaverPreviewFailed(false);
@@ -2115,9 +2156,22 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           </div>
         );
       }
-      case 'greeting':
+      case 'greeting': {
+        const greetingUseImage = !!((data.greeting as any)?.useImage ?? false);
+        const greetingThumb = ((data.greeting as any)?.thumbnail ?? '').trim();
         return (
           <div className="max-w-[320px] mx-auto">
+            {greetingUseImage && (
+              <div className="w-[120px] h-[120px] mx-auto rounded-xl border border-border bg-white overflow-hidden mb-3 flex items-center justify-center">
+                {greetingThumb ? (
+                  <img src={greetingThumb} alt="인사말 이미지" className="w-full h-full object-fill" />
+                ) : (
+                  <div className="w-full h-full bg-[color:var(--surface-20)] flex items-center justify-center text-[12px] text-on-surface-30 text-center px-3">
+                    이미지가 없습니다.
+                  </div>
+                )}
+              </div>
+            )}
             <h3 className="text-[0.875em] font-semibold text-on-surface-10 mb-3">
               {data.greeting.title}
             </h3>
@@ -2126,9 +2180,12 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
             </p>
           </div>
         );
+      }
       case 'hosts': {
         const groom = data.hosts.groom;
         const bride = data.hosts.bride;
+        const groomRelation = (groom.relation ?? '').trim() || '아들';
+        const brideRelation = (bride.relation ?? '').trim() || '딸';
         const renderParentLabel = (
           parent: typeof groom.father,
           fallback: string,
@@ -2167,7 +2224,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                   {groom.name || '신랑 이름'}
                 </p>
                 <p className="text-[0.8125em] text-on-surface-30 leading-relaxed break-keep">
-                  {groomParents} 의 아들
+                  {groomParents} 의 {groomRelation}
                 </p>
               </div>
               <div className="space-y-2 rounded-xl border border-border bg-white/70 px-3 py-4">
@@ -2176,7 +2233,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                   {bride.name || '신부 이름'}
                 </p>
                 <p className="text-[0.8125em] text-on-surface-30 leading-relaxed break-keep">
-                  {brideParents} 의 딸
+                  {brideParents} 의 {brideRelation}
                 </p>
               </div>
             </div>
@@ -2187,6 +2244,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
         const contactEnabled = isSectionEnabled('contact');
         const groomName = (data.hosts.groom.name ?? '').trim() || '신랑';
         const brideName = (data.hosts.bride.name ?? '').trim() || '신부';
+        const groomRelation = (data.hosts.groom.relation ?? '').trim() || '아들';
+        const brideRelation = (data.hosts.bride.relation ?? '').trim() || '딸';
         const groomFatherName = (data.hosts.groom.father.name ?? '').trim();
         const groomMotherName = (data.hosts.groom.mother.name ?? '').trim();
         const brideFatherName = (data.hosts.bride.father.name ?? '').trim();
@@ -2267,7 +2326,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                 <div className="min-h-[27px] flex items-center justify-center" style={{ fontSize: '14px', gap: '8px' }}>
                   {groomParentsText ? (
                     <div className="flex items-center gap-1">
-                      {groomParentsInline} 의 아들
+                      {groomParentsInline} 의 {groomRelation}
                     </div>
                   ) : ''}
                   <span className="font-semibold text-on-surface-10">{groomName}</span>
@@ -2275,7 +2334,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                 <div className="min-h-[27px] flex items-center justify-center" style={{ fontSize: '14px', gap: '8px' }}>
                   {brideParentsText ? (
                     <div className="flex items-center gap-1">
-                      {brideParentsInline} 의 딸
+                      {brideParentsInline} 의 {brideRelation}
                     </div>
                   ) : ''}
                   <span className="font-semibold text-on-surface-10">{brideName}</span>
@@ -3241,7 +3300,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
       <header className="w-full flex-shrink-0 bg-white border-b border-border z-30">
             <div className="h-16 flex items-center justify-between px-6">
           <div className="flex items-center gap-2">
-            <span className="text-xl font-extrabold tracking-tighter text-on-surface-10">ondaham</span>
+            <span className="text-xl font-extrabold tracking-tighter text-on-surface-10">dearhour</span>
           </div>
           <button
             type="button"
@@ -4091,6 +4150,9 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                               label="신랑"
                               nameValue={data.hosts.groom.name}
                               onNameChange={(value) => updateData('hosts.groom.name', value)}
+                              relationValue={data.hosts.groom.relation}
+                              onRelationChange={(value) => updateData('hosts.groom.relation', value)}
+                              relationOptions={GROOM_RELATION_OPTIONS}
                               phoneValue={data.hosts.groom.phone}
                               onPhoneChange={(value) => updateData('hosts.groom.phone', value)}
                               showPhone={isSectionEnabled('contact')}
@@ -4122,6 +4184,9 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                               label="신부"
                               nameValue={data.hosts.bride.name}
                               onNameChange={(value) => updateData('hosts.bride.name', value)}
+                              relationValue={data.hosts.bride.relation}
+                              onRelationChange={(value) => updateData('hosts.bride.relation', value)}
+                              relationOptions={BRIDE_RELATION_OPTIONS}
                               phoneValue={data.hosts.bride.phone}
                               onPhoneChange={(value) => updateData('hosts.bride.phone', value)}
                               showPhone={isSectionEnabled('contact')}
@@ -4266,6 +4331,81 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                       {item.id === 'greeting' && (
                         <>
                           <div className="flex flex-col gap-5">
+                            <FormItem label="옵션">
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                className="inline-flex items-center gap-2 text-[13px] text-on-surface-20 select-none cursor-pointer"
+                                onClick={() =>
+                                  updateData('greeting.useImage', !(((data.greeting as any)?.useImage) ?? false))
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    updateData('greeting.useImage', !(((data.greeting as any)?.useImage) ?? false));
+                                  }
+                                }}
+                              >
+                                <CircleCheckbox
+                                  checked={!!(((data.greeting as any)?.useImage) ?? false)}
+                                  onChange={(e) => updateData('greeting.useImage', e.target.checked)}
+                                />
+                                이미지 추가
+                              </span>
+                            </FormItem>
+                            {!!((data.greeting as any)?.useImage ?? false) && (
+                              <FormItem label="썸네일">
+                                <div className="flex-1 flex flex-col gap-2">
+                                  <div className="w-full min-h-[120px] flex items-start gap-3">
+                                    <div className="w-[120px] h-[120px] rounded-lg border border-border bg-[color:var(--surface-20)] overflow-hidden flex items-center justify-center">
+                                      {(data.greeting as any)?.thumbnail ? (
+                                        <img
+                                          src={(data.greeting as any).thumbnail}
+                                          alt="인사말 썸네일 미리보기"
+                                          className="w-full h-full object-fill"
+                                        />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-[12px] text-on-surface-30 text-center px-3">
+                                          썸네일 이미지가 없습니다.
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="h-full flex flex-col justify-start gap-2">
+                                      <label className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-10 inline-flex items-center cursor-pointer hover:bg-slate-50 w-fit self-start whitespace-nowrap leading-none flex-shrink-0">
+                                        사진 업로드
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          className="hidden"
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (!file) return;
+                                            const url = URL.createObjectURL(file);
+                                            updateData('greeting.thumbnail', url);
+                                            e.currentTarget.value = '';
+                                          }}
+                                        />
+                                      </label>
+                                      <button
+                                        type="button"
+                                        className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-20 hover:bg-slate-50 whitespace-nowrap leading-none flex-shrink-0 w-fit self-start"
+                                        onClick={() => setGreetingThumbnailPickerOpen(true)}
+                                      >
+                                        이미지 고르기
+                                      </button>
+                                      {!!(data.greeting as any)?.thumbnail && (
+                                        <button
+                                          type="button"
+                                          className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-10 inline-flex items-center cursor-pointer hover:bg-slate-50 w-fit self-start whitespace-nowrap leading-none flex-shrink-0"
+                                          onClick={() => updateData('greeting.thumbnail', '')}
+                                        >
+                                          삭제
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </FormItem>
+                            )}
                             <FormItem label="제목">
                               <Input type="text" value={data.greeting.title} onChange={(e) => updateData('greeting.title', e.target.value)} className="shadow-none flex-1" />
                             </FormItem>
@@ -5466,7 +5606,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                                     {data.share?.thumbnail && (
                                       <button
                                         type="button"
-                                        className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-30 hover:text-on-surface-10 hover:bg-slate-50"
+                                        className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-10 inline-flex items-center cursor-pointer hover:bg-slate-50 w-fit self-start whitespace-nowrap leading-none flex-shrink-0"
                                         onClick={() => updateData('share.thumbnail', '')}
                                       >
                                         삭제
@@ -5564,7 +5704,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
 
                       {item.id === "publish" && (
                         <>
-                          <FormItem label="청첩장 공개일">
+                          <FormItem label="공개일">
                             <div className="flex-1 flex flex-col gap-2">
                               <Input
                                 type="date"
@@ -5658,8 +5798,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           />
         </section>
 
-        {/* 3. 우측 미리보기 패널 (화면 전체 높이, 위아래 20px 간격) */}
-        <main className="flex flex-1 flex-col items-center min-h-0 overflow-hidden py-5 px-6 bg-gray-50 shadow-none">
+        {/* 3. 우측 미리보기 패널 — 숨김(다시 쓰려면 main에서 hidden 제거 후 flex flex-1 flex-col … 복구) */}
+        <main className="hidden" aria-hidden>
           {/* 바깥 컨테이너는 고정, 내부 프레임만 스크롤 */}
           <div className="flex-1 min-h-0 flex justify-center w-full max-w-[400px] min-h-full bg-transparent items-stretch shadow-none">
             <div
@@ -6045,7 +6185,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
       </Dialog>
 
       <Dialog open={shareThumbnailPickerOpen} onOpenChange={setShareThumbnailPickerOpen}>
-        <DialogContent className="w-[520px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border p-0 overflow-hidden">
+        <DialogContent className="w-[680px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border p-0 overflow-hidden">
           <div className="p-5 border-b border-border bg-white">
             <DialogTitle className="text-[16px] font-semibold text-on-surface-10">
               기본 일러스트 썸네일 선택
@@ -6086,6 +6226,55 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
               variant="outline"
               className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-10 inline-flex items-center cursor-pointer hover:bg-slate-50"
               onClick={() => setShareThumbnailPickerOpen(false)}
+            >
+              닫기
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={greetingThumbnailPickerOpen} onOpenChange={setGreetingThumbnailPickerOpen}>
+        <DialogContent className="w-[424px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border p-0 overflow-hidden">
+          <div className="p-5 border-b border-border bg-white">
+            <DialogTitle className="text-[16px] font-semibold text-on-surface-10">
+              인사말 이미지 선택
+            </DialogTitle>
+            <div className="text-[12px] text-on-surface-30 mt-1">
+              원하는 이미지를 클릭하면 인사말 이미지로 적용됩니다.
+            </div>
+          </div>
+          <div className="p-5 w-[424px] h-fit bg-[color:var(--surface-10)]">
+            <div className="grid w-fit h-fit grid-cols-3 gap-3 justify-items-center">
+              {flowerThumbnailPresets.map((t) => {
+                const selected = (data.greeting as any)?.thumbnail === t.url;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className={`w-[120px] h-[120px] rounded-lg overflow-hidden border bg-white flex items-center justify-center ${
+                      selected ? 'border-[color:var(--key)]' : 'border-border'
+                    } hover:border-[color:var(--key)]/50`}
+                    onClick={() => {
+                      updateData('greeting.thumbnail', t.url);
+                      setGreetingThumbnailPickerOpen(false);
+                    }}
+                  >
+                    <img
+                      src={t.url}
+                      alt={`${t.label} 썸네일`}
+                      className="w-full h-full object-fill"
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="p-4 w-[424px] border-t border-border bg-white flex justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-10 inline-flex items-center cursor-pointer hover:bg-slate-50"
+              onClick={() => setGreetingThumbnailPickerOpen(false)}
             >
               닫기
             </Button>

@@ -1,6 +1,6 @@
 {
   "private": true,
-  "name": "mocheong-workspace",
+  "name": "dearhour-workspace",
   "scripts": {
     "dev": "npm run dev --prefix invitation-builder",
     "build": "npm run build --prefix invitation-builder",

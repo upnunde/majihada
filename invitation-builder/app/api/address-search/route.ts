@@ -25,7 +25,7 @@ async function fetchNominatim(query: string, limit: number, signal: AbortSignal)
     headers: {
       "Accept-Language": "ko",
       // Nominatim은 User-Agent를 요구하는 경우가 있어 프록시에서 명시합니다.
-      "User-Agent": "mocheong-invitation-builder/0.1 (contact: unknown)",
+      "User-Agent": "dearhour-invitation-builder/0.1 (contact: unknown)",
     },
   });
 

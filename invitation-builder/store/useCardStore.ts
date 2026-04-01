@@ -153,7 +153,7 @@ export interface CardData {
     /** 마감일(YYYY-MM-DD, 비우면 제한 없음) */
     deadline: string;
   };
-  /** 청첩장 공개 설정 */
+  /** 공개일 설정 */
   publish: { publicStartDate: string };
   /** 영문 등 다국어 노출(추후 콘텐츠 연동) */
   i18n: { enabled: boolean };
