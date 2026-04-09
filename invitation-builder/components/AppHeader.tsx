@@ -26,7 +26,14 @@ export default function AppHeader({ rightSlot }: AppHeaderProps) {
       <div className="h-16 flex items-center justify-between px-6">
         <div className="flex items-center gap-2">
           <Link href="/" className="inline-flex items-center">
-            <Image src="/DHlogo.svg" alt="dearhour" width={154} height={21} priority />
+            <Image
+              src="/DHlogo.svg"
+              alt="dearhour"
+              width={154}
+              height={21}
+              style={{ width: "fit-content", height: "18px" }}
+              priority
+            />
           </Link>
         </div>
 
