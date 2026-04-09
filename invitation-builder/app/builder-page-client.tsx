@@ -6421,11 +6421,11 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                 {layoutOrder.includes('hosts') && (
                   <div className="w-full py-8 px-6 flex flex-col items-center text-center">
                     <div className="w-full max-w-[340px] mx-auto space-y-5">
-                      <p className="text-[2em] font-medium tracking-[0.02em] text-on-surface-10 leading-none">
+                      <p className="flex justify-center items-center text-[2em] font-medium tracking-[0.02em] text-on-surface-10 leading-none">
                         {(((data as any).i18n?.brideFirstInfo ?? false)
                           ? ((data.hosts.bride.name ?? '').trim() || '신부')
                           : ((data.hosts.groom.name ?? '').trim() || '신랑'))}
-                        <span className="mx-4 inline-block text-on-surface-30" style={{ width: '1px' }}>|</span>
+                        <span className="mx-4 inline-flex items-center align-middle text-on-surface-30 leading-none">·</span>
                         {(((data as any).i18n?.brideFirstInfo ?? false)
                           ? ((data.hosts.groom.name ?? '').trim() || '신랑')
                           : ((data.hosts.bride.name ?? '').trim() || '신부'))}
@@ -6443,7 +6443,17 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                               ? `${eventDate!.getFullYear()}년 ${eventDate!.getMonth() + 1}월 ${eventDate!.getDate()}일 ${weekday}요일`
                               : eventDateText;
                             const summaryTimeLine = (data.eventInfo.time ?? '').trim();
-                            return `${summaryDateLine}${summaryTimeLine ? ` ${summaryTimeLine}` : ''}`;
+                            return (
+                              <>
+                                {summaryDateLine}
+                                {summaryTimeLine && (
+                                  <>
+                                    <br />
+                                    {summaryTimeLine}
+                                  </>
+                                )}
+                              </>
+                            );
                           })()}
                         </p>
                         {!!(data.eventInfo.venueName ?? '').trim() && (
