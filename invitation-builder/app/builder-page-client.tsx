@@ -1223,10 +1223,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
     ],
     [],
   );
-  const greetingRandomThumbnail = useMemo(() => {
-    const randomIndex = Math.floor(Math.random() * flowerThumbnailPresets.length);
-    return flowerThumbnailPresets[randomIndex]?.url ?? '/flower01.svg';
-  }, [flowerThumbnailPresets]);
+  const greetingDefaultThumbnail = flowerThumbnailPresets[0]?.url ?? '/flower01.svg';
 
   useEffect(() => {
     setNaverPreviewFailed(false);
@@ -2418,9 +2415,9 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
         );
       }
       case 'greeting': {
-        const greetingUseImage = !!((data.greeting as any)?.useImage ?? false);
+        const greetingUseImage = !!((data.greeting as any)?.useImage ?? true);
         const greetingThumb = ((data.greeting as any)?.thumbnail ?? '').trim();
-        const greetingThumbnailForPreview = greetingThumb || greetingRandomThumbnail;
+        const greetingThumbnailForPreview = greetingThumb || greetingDefaultThumbnail;
         return (
           <div className="max-w-[320px] mx-auto">
             {greetingUseImage && (
@@ -4851,28 +4848,28 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                                 tabIndex={0}
                                 className="inline-flex items-center gap-2 text-[13px] text-on-surface-20 select-none cursor-pointer"
                                 onClick={() =>
-                                  updateData('greeting.useImage', !(((data.greeting as any)?.useImage) ?? false))
+                                  updateData('greeting.useImage', !(((data.greeting as any)?.useImage) ?? true))
                                 }
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter' || e.key === ' ') {
-                                    updateData('greeting.useImage', !(((data.greeting as any)?.useImage) ?? false));
+                                    updateData('greeting.useImage', !(((data.greeting as any)?.useImage) ?? true));
                                   }
                                 }}
                               >
                                 <CircleCheckbox
-                                  checked={!!(((data.greeting as any)?.useImage) ?? false)}
+                                  checked={!!(((data.greeting as any)?.useImage) ?? true)}
                                   onChange={(e) => updateData('greeting.useImage', e.target.checked)}
                                 />
                                 이미지 추가
                               </span>
                             </FormItem>
-                            {!!((data.greeting as any)?.useImage ?? false) && (
+                            {!!((data.greeting as any)?.useImage ?? true) && (
                               <FormItem label="썸네일">
                                 <div className="flex-1 flex flex-col gap-2">
                                   <div className="w-full min-h-[120px] flex items-start gap-3">
                                     <div className="w-[120px] h-[120px] rounded-lg border border-border bg-[color:var(--surface-20)] overflow-hidden flex items-center justify-center">
                                       <img
-                                        src={((data.greeting as any)?.thumbnail || greetingRandomThumbnail)}
+                                        src={((data.greeting as any)?.thumbnail || greetingDefaultThumbnail)}
                                         alt="인사말 썸네일 미리보기"
                                         className="w-full h-full object-fill"
                                       />

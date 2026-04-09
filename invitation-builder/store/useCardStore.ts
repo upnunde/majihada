@@ -72,7 +72,6 @@ export interface CardData {
     imageMode?: 'single' | 'multi';
     transitionEffect?: string;
     transitionIntervalSec?: number;
-    frameEffect?: '적용 안함' | '물결' | '안개' | '방울';
   };
   hosts: { groom: Profile; bride: Profile; showContacts: boolean };
   eventInfo: EventInfo;
@@ -281,7 +280,6 @@ export const useCardStore = create<CardStore>((set) => ({
       imageMode: 'single',
       transitionEffect: '없음',
       transitionIntervalSec: 3,
-      frameEffect: '물결',
     },
     hosts: {
       groom: { 

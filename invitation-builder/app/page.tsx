@@ -51,7 +51,7 @@ export default function HomePage() {
             </p>
             <div className="mt-10 flex flex-wrap gap-3">
               <Link
-                href="/editor"
+                href="/mobile-invitation/chat"
                 className="inline-flex h-11 items-center rounded-lg bg-[#111] px-5 text-sm font-semibold text-white hover:bg-black"
               >
                 지금 무료로 시작하기
