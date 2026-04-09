@@ -261,6 +261,7 @@ interface CardStore {
   updateLocation: (location: Partial<CardData['location']>) => void;
   // ★ 깊은 뎁스(부모님 정보, 계좌 등) 업데이트를 위한 만능 함수
   updateData: (path: string, value: any) => void;
+  setData: (nextData: CardData) => void;
 }
 
 // --- 4. 상태 관리 로직 ---
@@ -387,6 +388,7 @@ export const useCardStore = create<CardStore>((set) => ({
   updateEventInfo: (newInfo) => set((state) => ({ data: { ...state.data, eventInfo: { ...state.data.eventInfo, ...newInfo } } })),
   updateGreeting: (newGreeting) => set((state) => ({ data: { ...state.data, greeting: { ...state.data.greeting, ...newGreeting } } })),
   updateLocation: (newLocation) => set((state) => ({ data: { ...state.data, location: { ...state.data.location, ...newLocation } } })),
+  setData: (nextData) => set(() => ({ data: nextData })),
   
   // 문자열 경로를 받아 중첩된 객체를 안전하게 업데이트하는 로직
   updateData: (path, value) => set((state) => {

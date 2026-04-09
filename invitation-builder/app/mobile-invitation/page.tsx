@@ -16,7 +16,7 @@ export default function MobileInvitationPage() {
             </p>
             <div className="mt-8">
               <Link
-                href="/editor"
+                href="/mobile-invitation/chat"
                 className="inline-flex h-11 items-center rounded-lg bg-[#111] px-5 text-sm font-semibold text-white hover:bg-black"
               >
                 청첩장 만들기

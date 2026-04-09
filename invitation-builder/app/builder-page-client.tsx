@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import { Palette, Music, Image as ImageIcon, Users, MessageSquare, MessageCircle, Phone, CalendarHeart, MapPin, Bell, Images, Wallet, BookOpen, Youtube, Share2, Shield, CheckCircle2, GripVertical, Play, Pause, VolumeX, Volume2, X, ChevronDown, ChevronLeft, ChevronRight, MoreVertical, Pencil, Trash2, RotateCw, RefreshCcw, Move, ArrowUpDown, ClipboardCheck, Calendar, Settings } from 'lucide-react';
 import AppHeader from '@/components/AppHeader';
 
@@ -237,6 +238,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { useCardStore } from "../store/useCardStore";
+import type { CardData } from "../store/useCardStore";
 import { useSortable } from "@/lib/useSortable";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import GuestPhotoUploadForm from "@/components/GuestPhotoUploadForm";
@@ -898,8 +900,23 @@ function GalleryImageGrid({
 }
 
 export default function BuilderPageClient({ initialParams, initialSearchParams }: any) {
+  const router = useRouter();
   const [activeSection, setActiveSection] = useState(sidebarItems[0].id);
-  const { data, updateData } = useCardStore();
+  const { data, updateData, setData } = useCardStore();
+  const cloneCardData = (source: CardData): CardData => {
+    try {
+      return structuredClone(source);
+    } catch {
+      return JSON.parse(JSON.stringify(source));
+    }
+  };
+  const [invitationTabs, setInvitationTabs] = useState<Array<{ id: string; label: string; data: CardData }>>([]);
+  const [activeInvitationTabId, setActiveInvitationTabId] = useState<string>("");
+  const [editingInvitationTabId, setEditingInvitationTabId] = useState<string | null>(null);
+  const [editingInvitationTabName, setEditingInvitationTabName] = useState("");
+  const isSwitchingInvitationRef = useRef(false);
+  const onboardingAppliedRef = useRef(false);
+  const editorAccessGuardAppliedRef = useRef(false);
   const baseLayoutOrder = ['main', 'greeting', 'hosts', 'eventInfo', 'location'];
   const sectionEnabled = data.sectionEnabled ?? {};
   const isSectionEnabled = (id: string) => sectionEnabled[id] ?? (id === 'bgm');
@@ -962,6 +979,135 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   const [galleryDetailIndex, setGalleryDetailIndex] = useState(0);
   const previewScrollRef = useRef<HTMLDivElement | null>(null);
   const previewFrameRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (invitationTabs.length > 0) return;
+    const initialId = "invitation-1";
+    setInvitationTabs([{ id: initialId, label: "기본", data: cloneCardData(data) }]);
+    setActiveInvitationTabId(initialId);
+  }, [invitationTabs.length, data]);
+
+  useEffect(() => {
+    if (!activeInvitationTabId) return;
+    if (isSwitchingInvitationRef.current) {
+      isSwitchingInvitationRef.current = false;
+      return;
+    }
+    setInvitationTabs((prev) =>
+      prev.map((tab) => (tab.id === activeInvitationTabId ? { ...tab, data: cloneCardData(data) } : tab)),
+    );
+  }, [activeInvitationTabId, data]);
+
+  const switchInvitationTab = (tabId: string) => {
+    if (tabId === activeInvitationTabId) return;
+    const target = invitationTabs.find((tab) => tab.id === tabId);
+    if (!target) return;
+    isSwitchingInvitationRef.current = true;
+    setActiveInvitationTabId(tabId);
+    setData(cloneCardData(target.data));
+  };
+
+  const addInvitationTab = () => {
+    const nextIndex = invitationTabs.length + 1;
+    const nextId = `invitation-${Date.now()}-${nextIndex}`;
+    const sourceTab =
+      invitationTabs.find((tab) => tab.id === activeInvitationTabId) ?? invitationTabs[0];
+    const duplicated = sourceTab ? cloneCardData(sourceTab.data) : cloneCardData(data);
+    setInvitationTabs((prev) => [...prev, { id: nextId, label: `청첩장 ${nextIndex}`, data: duplicated }]);
+    isSwitchingInvitationRef.current = true;
+    setActiveInvitationTabId(nextId);
+    setData(cloneCardData(duplicated));
+  };
+
+  const removeInvitationTab = (tabId: string) => {
+    if (invitationTabs.length <= 1) return;
+    const targetIndex = invitationTabs.findIndex((tab) => tab.id === tabId);
+    if (targetIndex < 0) return;
+
+    const nextTabs = invitationTabs.filter((tab) => tab.id !== tabId);
+    setInvitationTabs(nextTabs);
+
+    if (activeInvitationTabId === tabId) {
+      const fallback = nextTabs[Math.max(0, targetIndex - 1)] ?? nextTabs[0];
+      if (!fallback) return;
+      isSwitchingInvitationRef.current = true;
+      setActiveInvitationTabId(fallback.id);
+      setData(cloneCardData(fallback.data));
+    }
+  };
+
+  const startEditInvitationTabName = (tabId: string, currentLabel: string) => {
+    setEditingInvitationTabId(tabId);
+    setEditingInvitationTabName(currentLabel);
+  };
+
+  const commitInvitationTabName = () => {
+    if (!editingInvitationTabId) return;
+    const nextLabel = editingInvitationTabName.trim();
+    if (!nextLabel) {
+      setEditingInvitationTabId(null);
+      setEditingInvitationTabName("");
+      return;
+    }
+    setInvitationTabs((prev) =>
+      prev.map((tab) => (tab.id === editingInvitationTabId ? { ...tab, label: nextLabel } : tab)),
+    );
+    setEditingInvitationTabId(null);
+    setEditingInvitationTabName("");
+  };
+
+  const pickSearchParam = (key: string) => {
+    const query = initialSearchParams ?? {};
+    const value = query[key];
+    if (Array.isArray(value)) return value[0] ?? '';
+    return typeof value === 'string' ? value : '';
+  };
+
+  useEffect(() => {
+    if (editorAccessGuardAppliedRef.current) return;
+    editorAccessGuardAppliedRef.current = true;
+
+    const invitationId = pickSearchParam('invitationId').trim();
+    const isOnboardingEntry = pickSearchParam('onboarding') === '1';
+    const hasDraft = typeof window !== 'undefined' && window.localStorage.getItem('mcard:hasDraft') === '1';
+
+    // 최초 진입은 채팅 필수, 임시저장/기존 초대장 편집은 바로 진입
+    if (!isOnboardingEntry && !invitationId && !hasDraft) {
+      router.replace('/mobile-invitation/chat');
+    }
+  }, [initialSearchParams, router]);
+
+  useEffect(() => {
+    if (onboardingAppliedRef.current) return;
+    const isOnboarding = pickSearchParam('onboarding') === '1';
+    if (!isOnboarding) return;
+    onboardingAppliedRef.current = true;
+
+    const groomName = pickSearchParam('groomName').trim();
+    const brideName = pickSearchParam('brideName').trim();
+    const weddingDate = pickSearchParam('weddingDate').trim();
+    const weddingTime = pickSearchParam('weddingTime').trim();
+    const venueName = pickSearchParam('venueName').trim();
+    const venueDetail = pickSearchParam('venueDetail').trim();
+    const venueAddress = pickSearchParam('venueAddress').trim();
+    const themeType = pickSearchParam('themeType').trim().toUpperCase();
+
+    if (groomName) updateData('hosts.groom.name', groomName);
+    if (brideName) updateData('hosts.bride.name', brideName);
+    if (weddingDate) updateData('eventInfo.date', weddingDate);
+    if (weddingTime) updateData('eventInfo.time', weddingTime);
+    if (venueName) updateData('eventInfo.venueName', venueName);
+    if (venueDetail) updateData('eventInfo.venueDetail', venueDetail);
+    if (venueAddress) updateData('location.address', venueAddress);
+    if (['A', 'B', 'C', 'D', 'E'].includes(themeType)) {
+      updateData('main.introType', themeType);
+    }
+    if (groomName || brideName) {
+      const composedTitle = `${groomName || '신랑'} ♥ ${brideName || '신부'} 결혼식`;
+      updateData('main.title', composedTitle);
+      updateData('share.title', composedTitle);
+    }
+  }, [initialSearchParams, updateData]);
 
   // 공유 섹션 기본 썸네일 프리셋 (SVG를 data-uri로 생성)
   const shareThumbnailPresets = useMemo(() => {
@@ -2705,6 +2851,10 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                         </div>
                       </div>
                     )}
+                    {/* 미리보기에서는 지도 상호작용(드래그/확대/축소) 비활성화 */}
+                    <div className="absolute inset-0 z-10" aria-hidden />
+                    {/* 지도 우측 상단 줌 컨트롤(+/-) 비노출 처리 */}
+                    <div className="absolute right-2 top-2 z-20 h-20 w-10 rounded-md bg-[color:var(--surface-20)]" aria-hidden />
                   </div>
 
                   {/* 하단 앱 전송 바 (캡처 스타일) */}
@@ -3413,6 +3563,11 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
               window.alert(
                 "저장되었습니다.\n\n마이페이지에서 제작한 청첩장 목록을 확인할 수 있어요.\n실제 하객 공개·링크 활용은 결제 완료 후 가능하며, 결제 전 미리보기에는 워터마크가 표시됩니다.",
               );
+              try {
+                window.localStorage.setItem('mcard:hasDraft', '1');
+              } catch (_e) {
+                // ignore localStorage errors
+              }
             }}
           >
             저장하기
@@ -3509,6 +3664,78 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           style={{ width: editorWidth }}
         >
           <div ref={editorScrollRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scroll-smooth no-scrollbar">
+            <div className="px-4 pt-4 pb-2 bg-[color:var(--surface-20)]">
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+                {invitationTabs.map((tab) => {
+                  const isActive = tab.id === activeInvitationTabId;
+                  return (
+                    <div key={tab.id} className="group flex items-center">
+                      {editingInvitationTabId === tab.id ? (
+                        <input
+                          autoFocus
+                          value={editingInvitationTabName}
+                          onChange={(e) => setEditingInvitationTabName(e.target.value)}
+                          onBlur={commitInvitationTabName}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              commitInvitationTabName();
+                            }
+                            if (e.key === "Escape") {
+                              setEditingInvitationTabId(null);
+                              setEditingInvitationTabName("");
+                            }
+                          }}
+                          className="h-8 w-[120px] rounded-lg border border-[color:var(--key)] bg-white px-2 text-xs font-semibold text-[color:var(--key)] outline-none"
+                        />
+                      ) : (
+                        <div
+                          className={`inline-flex h-8 shrink-0 items-center rounded-lg border bg-white transition-all ${
+                            isActive ? "border-[color:var(--key)] text-[color:var(--key)]" : "border-border text-on-surface-20"
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => switchInvitationTab(tab.id)}
+                            className={`h-full px-3 text-xs font-semibold ${isActive ? "text-[color:var(--key)]" : "text-on-surface-20"}`}
+                          >
+                            {tab.label}
+                          </button>
+                          <div className="flex h-full max-w-0 items-center gap-1 overflow-hidden pr-0 opacity-0 transition-all duration-200 group-hover:max-w-28 group-hover:pr-2 group-hover:opacity-100">
+                            <button
+                              type="button"
+                              onClick={() => startEditInvitationTabName(tab.id, tab.label)}
+                              className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border bg-white text-on-surface-20 hover:bg-slate-50"
+                              aria-label={`${tab.label} 탭 이름 수정`}
+                              title="탭 이름 수정"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeInvitationTab(tab.id)}
+                              disabled={invitationTabs.length <= 1}
+                              className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border bg-white text-on-surface-20 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                              aria-label={`${tab.label} 탭 제거`}
+                              title={invitationTabs.length <= 1 ? "탭은 최소 1개 유지됩니다" : "탭 제거"}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={addInvitationTab}
+                  className="inline-flex h-8 shrink-0 items-center rounded-lg border border-dashed border-border bg-white px-3 text-xs font-semibold text-on-surface-20 hover:bg-slate-50"
+                >
+                  + 탭 추가
+                </button>
+              </div>
+            </div>
             <div
               className="p-4 flex-1 flex flex-col gap-3 [&>div]:p-0"
               style={{ backgroundColor: 'var(--surface-20)' }}
@@ -3527,10 +3754,16 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                 return (
                   <React.Fragment key={item.id}>
                 {isFirstContentOptional && (
-                  <div className="text-[13px] font-bold text-on-surface-30 pt-2 mt-10">선택사항</div>
+                  <>
+                    <div className="border-t border-dashed border-[color:var(--border-20)] my-2 mt-10" />
+                    <div className="text-[13px] font-bold text-on-surface-30 pt-2">선택사항</div>
+                  </>
                 )}
                 {isFirstOtherOption && (
-                  <div className="text-[13px] font-bold text-on-surface-30 pt-2 mt-10">옵션</div>
+                  <>
+                    <div className="border-t border-dashed border-[color:var(--border-20)] my-2 mt-10" />
+                    <div className="text-[13px] font-bold text-on-surface-30 pt-2">옵션</div>
+                  </>
                 )}
                 <div
                   id={item.id}
