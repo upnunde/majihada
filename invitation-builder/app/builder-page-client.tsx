@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Palette, Music, Image as ImageIcon, Users, MessageSquare, MessageCircle, Phone, CalendarHeart, MapPin, Bell, Images, Wallet, BookOpen, Youtube, Share2, Shield, CheckCircle2, GripVertical, Play, Pause, VolumeX, Volume2, X, ChevronDown, ChevronLeft, ChevronRight, MoreVertical, Pencil, Trash2, RotateCw, RefreshCcw, Move, ArrowUpDown, ClipboardCheck, Calendar, Settings } from 'lucide-react';
 import AppHeader from '@/components/AppHeader';
 import type { CardData } from "../store/useCardStore";
 import { DEFAULT_MAIN_PRESET_URL, MAIN_IMAGE_PRESETS } from "@/lib/main-image-presets";
-import { SHARE_THUMBNAIL_PRESETS } from "@/lib/share-thumbnail-presets";
 import { HostsIntroPreview } from "./hosts-intro-preview";
 
 const DEFAULT_LOCATION_PREVIEW_COORDS = { lat: 37.579617, lon: 126.977041 }; // 경복궁
@@ -460,6 +459,7 @@ const sidebarItems = [
   { id: 'main', icon: ImageIcon, label: '메인', category: '필수' },
   { id: 'hosts', icon: Users, label: '신랑신부', category: '필수' },
   { id: 'greeting', icon: MessageSquare, label: '인사말', category: '필수' },
+  { id: 'contact', icon: Phone, label: '연락처', category: '필수', hasSwitch: true },
   { id: 'eventInfo', icon: CalendarHeart, label: '예식정보', category: '필수' },
   { id: 'location', icon: MapPin, label: '오시는 길', category: '필수' },
   // 선택 사항
@@ -675,6 +675,34 @@ function HostContactField({
           />
         </>
       )}
+    </FormItem>
+  );
+}
+
+function ContactPhoneField({
+  label,
+  name,
+  phoneValue,
+  onPhoneChange,
+}: {
+  label: string;
+  name: string;
+  phoneValue?: string;
+  onPhoneChange: (value: string) => void;
+}) {
+  return (
+    <FormItem label={label}>
+      <div className="flex flex-col gap-1.5 flex-1 w-full">
+        <span className="text-[13px] text-on-surface-10 font-medium">{name}</span>
+        <Input
+          placeholder="전화번호를 입력하세요"
+          value={phoneValue ?? ''}
+          onChange={(e) => onPhoneChange(formatKoreanPhone(e.target.value))}
+          inputMode="numeric"
+          autoComplete="tel"
+          className="shadow-none"
+        />
+      </div>
     </FormItem>
   );
 }
@@ -932,11 +960,9 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   const [activeInvitationTabId, setActiveInvitationTabId] = useState<string>("");
   const [editingInvitationTabId, setEditingInvitationTabId] = useState<string | null>(null);
   const [editingInvitationTabName, setEditingInvitationTabName] = useState("");
-  const [invitationTabRemoveConfirmId, setInvitationTabRemoveConfirmId] = useState<string | null>(null);
   const isSwitchingInvitationRef = useRef(false);
   const onboardingAppliedRef = useRef(false);
-  const editorAccessGuardAppliedRef = useRef(false);
-  const baseLayoutOrder = ['main', 'greeting', 'hosts', 'eventInfo', 'location'];
+  const baseLayoutOrder = ['main', 'greeting', 'hosts', 'contact', 'eventInfo', 'location'];
   const sectionEnabled = data.sectionEnabled ?? {};
   const isSectionEnabled = (id: string) => sectionEnabled[id] ?? (id === 'bgm');
   const isBgmEnabled = isSectionEnabled('bgm');
@@ -1005,10 +1031,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   const [galleryDetailOpen, setGalleryDetailOpen] = useState(false);
   const [galleryDetailIndex, setGalleryDetailIndex] = useState(0);
   const previewScrollRef = useRef<HTMLDivElement | null>(null);
-  const [previewPortalContainer, setPreviewPortalContainer] = useState<HTMLDivElement | null>(null);
-  const setPreviewFrameNode = useCallback((node: HTMLDivElement | null) => {
-    setPreviewPortalContainer(node);
-  }, []);
+  const previewFrameRef = useRef<HTMLDivElement | null>(null);
   const sidebarRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -1097,20 +1120,6 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   };
 
   useEffect(() => {
-    if (editorAccessGuardAppliedRef.current) return;
-    editorAccessGuardAppliedRef.current = true;
-
-    const invitationId = pickSearchParam('invitationId').trim();
-    const isOnboardingEntry = pickSearchParam('onboarding') === '1';
-    const hasDraft = typeof window !== 'undefined' && window.localStorage.getItem('mcard:hasDraft') === '1';
-
-    // 최초 진입은 채팅 필수, 임시저장/기존 초대장 편집은 바로 진입
-    if (!isOnboardingEntry && !invitationId && !hasDraft) {
-      router.replace('/mobile-invitation/chat');
-    }
-  }, [initialSearchParams, router]);
-
-  useEffect(() => {
     if (onboardingAppliedRef.current) return;
     const isOnboarding = pickSearchParam('onboarding') === '1';
     if (!isOnboarding) return;
@@ -1142,6 +1151,82 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
       updateData('share.title', composedTitle);
     }
   }, [initialSearchParams, updateData]);
+
+  // 공유 섹션 기본 썸네일 프리셋 (SVG를 data-uri로 생성)
+  const shareThumbnailPresets = useMemo(() => {
+    const makeDataUri = (svg: string) =>
+      `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+
+    const makeBase = (bg1: string, bg2: string, inner: string) => `
+      <svg xmlns="http://www.w3.org/2000/svg" width="300" height="157" viewBox="0 0 300 157">
+        <defs>
+          <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="${bg1}"/>
+            <stop offset="1" stop-color="${bg2}"/>
+          </linearGradient>
+        </defs>
+        <rect width="300" height="157" rx="22" fill="url(#bg)"/>
+        <rect x="0" y="0" width="300" height="157" rx="22" fill="rgba(255,255,255,0.12)"/>
+        ${inner}
+      </svg>
+    `;
+
+    const heart = (color: string) => `
+      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="${color}" transform="translate(132 45) scale(4.2)"/>
+      <path d="M150 87c-10-7-22-17-22-29 0-6 5-11 11-11 4 0 8 3 11 7 3-4 7-7 11-7 6 0 11 5 11 11 0 12-12 22-22 29z" fill="rgba(255,255,255,0.25)"/>
+    `;
+
+    const ring = (stroke: string) => `
+      <g fill="none" stroke="${stroke}" stroke-width="8" stroke-linecap="round">
+        <path d="M150 54c-44 0-80 25-80 54s36 54 80 54 80-25 80-54-36-54-80-54z" opacity="0.12"/>
+        <circle cx="150" cy="90" r="44"/>
+        <circle cx="150" cy="90" r="30" stroke="rgba(255,255,255,0.35)" stroke-width="6"/>
+      </g>
+      <path d="M150 56c-26 6-42 22-42 34 0 14 18 31 42 34 24-3 42-20 42-34 0-12-16-28-42-34z" fill="rgba(255,255,255,0.12)"/>
+    `;
+
+    const flower = (color: string) => `
+      <g opacity="0.95">
+        ${[0, 60, 120, 180, 240, 300].map((a) => {
+          const rad = (a * Math.PI) / 180;
+          const x = 150 + Math.cos(rad) * 36;
+          const y = 90 + Math.sin(rad) * 26;
+          return `<circle cx="${x}" cy="${y}" r="14" fill="${color}" opacity="0.75"/>`;
+        }).join("")}
+        <circle cx="150" cy="90" r="16" fill="${color}"/>
+        <circle cx="150" cy="90" r="8" fill="rgba(255,255,255,0.35)"/>
+      </g>
+    `;
+
+    const bow = (color: string) => `
+      <path d="M135 70c-18-14-40-12-52 2-8 10-7 23 2 32 12 12 31 12 46 4 9-5 15-12 17-16z" fill="${color}" opacity="0.8"/>
+      <path d="M165 70c18-14 40-12 52 2 8 10 7 23-2 32-12 12-31 12-46 4-9-5-15-12-17-16z" fill="${color}" opacity="0.8"/>
+      <path d="M150 74c-10 0-18 8-18 18s8 18 18 18 18-8 18-18-8-18-18-18z" fill="${color}"/>
+      <path d="M150 92c-18 0-30 10-30 18 0 6 12 14 30 14s30-8 30-14c0-8-12-18-30-18z" fill="rgba(255,255,255,0.18)"/>
+    `;
+
+    const sparkle = (color: string) => `
+      <g>
+        <path d="M150 52l10 24 24 10-24 10-10 24-10-24-24-10 24-10z" fill="${color}"/>
+        <circle cx="210" cy="95" r="10" fill="${color}" opacity="0.75"/>
+        <circle cx="90" cy="95" r="8" fill="${color}" opacity="0.65"/>
+        <path d="M62 78l4 9 9 4-9 4-4 9-4-9-9-4 9-4z" fill="rgba(255,255,255,0.35)"/>
+      </g>
+    `;
+
+    const presets = [
+      { id: 'heart', label: '하트', bg1: '#FCE7F3', bg2: '#EDE0FD', icon: heart('#7A2FEB') },
+      { id: 'flower', label: '플라워', bg1: '#EAF8F5', bg2: '#FDEFF6', icon: flower('#2D8C7F') },
+      { id: 'ring', label: '링', bg1: '#EEF3FF', bg2: '#EDE0FD', icon: ring('#5D76C9') },
+      { id: 'bow', label: '리본', bg1: '#FFFDFE', bg2: '#F3ECFF', icon: bow('#7A2FEB') },
+      { id: 'sparkle', label: '반짝', bg1: '#F8F9FA', bg2: '#EDE0FD', icon: sparkle('#7A2FEB') },
+    ];
+
+    return presets.map((p) => ({
+      ...p,
+      url: p.id === 'flower' ? '/chrysanthemum.svg' : makeDataUri(makeBase(p.bg1, p.bg2, p.icon)),
+    }));
+  }, []);
 
   const flowerThumbnailPresets = useMemo(
     () => [
@@ -2122,9 +2207,6 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           id !== "i18n",
       ),
   ];
-  /** 메인 히어로 + 신랑·신부 인트로를 한 블록으로 묶어 인트로 타입(A~E) 레이아웃 적용 */
-  const mergeMainAndHostsIntro =
-    layoutOrder.includes("main") && layoutOrder.includes("hosts");
   const orderedItems = [...requiredItems, ...orderedContentOptionalItems, ...otherOptionItems];
 
   const sidebarSortable = useSortable({
@@ -2133,13 +2215,15 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   });
 
   const scrollToSection = (id: string) => {
-    setActiveSection(id);
     const element = document.getElementById(id);
     const container = editorScrollRef.current;
     if (!element || !container) return;
 
     // 선택한 섹션의 상단이 편집 패널 상단 30% 지점에 오도록 정렬
-    const elementTop = element.offsetTop;
+    setActiveSection(id);
+    const containerRect = container.getBoundingClientRect();
+    const elementRect = element.getBoundingClientRect();
+    const elementTop = elementRect.top - containerRect.top + container.scrollTop;
     const anchorOffset = container.clientHeight * 0.3;
     const targetTop = elementTop - anchorOffset;
     const maxTop = Math.max(0, container.scrollHeight - container.clientHeight);
@@ -2266,7 +2350,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
         if (mode === 'default') {
           const presetUrl = String((data.main as any).presetImage ?? '').trim() || DEFAULT_MAIN_PRESET_URL;
           return (
-            <div className="w-full block p-0 m-0 leading-none">
+            <div className="w-full flex flex-col items-stretch gap-0">
               <div className="w-full aspect-square max-w-full mx-auto rounded-none overflow-hidden relative bg-[color:var(--surface-20)]">
                 <div
                   className="absolute inset-0 bg-center bg-cover"
@@ -2322,8 +2406,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
               : '';
 
         return (
-          <div className="w-full block p-0 m-0 leading-none">
-            <div className="w-full aspect-[3/4] rounded-none shadow-none overflow-hidden relative bg-[color:var(--surface-20)]">
+          <div className="w-full flex flex-col items-stretch gap-0">
+            <div className="w-full aspect-[3/4] rounded-none flex flex-col justify-end items-stretch text-white shadow-none overflow-hidden relative">
               {/* 배경 이미지 레이어 */}
               {transitionEffect === '디졸브' || transitionEffect === '크로스페이드' ? (
                 <>
@@ -2588,7 +2672,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
               <p className="min-h-[27px] flex items-center justify-center text-[18px] text-on-surface-20 tracking-tight text-center">
                 {orderedCoupleRows[0].role} <span className="font-semibold text-on-surface-10 ml-1">{orderedCoupleRows[0].name}</span>
                 <span className="mx-2 text-on-surface-30">·</span>
-                {orderedCoupleRows[1].role} <span className="font-semibold text-on-surface-10">{orderedCoupleRows[1].name}</span>
+                {orderedCoupleRows[1].role} <span className="font-semibold text-on-surface-10 ml-1">{orderedCoupleRows[1].name}</span>
               </p>
             )}
 
@@ -2611,7 +2695,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                     {contactRows.map((row) => {
                       const phone = (row.phone ?? '').trim();
                       return (
-                      <div key={row.role} className="rounded-xl mb-0 bg-white px-4 py-2 flex items-center justify-between gap-2">
+                      <div key={row.role} className="rounded-xl mb-0 bg-white px-4 py-2.5 flex items-center justify-between gap-2">
                         <div className="min-w-0 text-left">
                           <p className="text-[15px] font-medium tracking-[0.06em] text-on-surface-30">{row.role}</p>
                         </div>
@@ -2707,12 +2791,14 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           </>
         ) : null;
 
+        let monthLabel = "";
         let calendarCells: Array<{ key: string; day?: number; isEvent?: boolean }> = [];
         if (showCalendar && isValidEventDate) {
           const year = eventDate!.getFullYear();
           const month = eventDate!.getMonth();
           const firstWeekday = new Date(year, month, 1).getDay();
           const lastDay = new Date(year, month + 1, 0).getDate();
+          monthLabel = `${year}.${String(month + 1).padStart(2, "0")}`;
           for (let i = 0; i < firstWeekday; i += 1) {
             calendarCells.push({ key: `blank-${i}` });
           }
@@ -2733,13 +2819,13 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           >
             {showCalendar && isValidEventDate && (
               <div className="w-full rounded-none border-0 px-0 py-10 text-left shadow-none mt-0 mb-0 flex flex-col gap-10">
-                <div className="flex h-fit flex-col items-center justify-center mx-0 mb-0">
+                <div className="flex h-fit items-center justify-center mx-0">
                     <div className="text-center text-[16px] text-[color:var(--on-primary-container)]/80 mb-0">
                       <p>{formattedDateWithWeekday}</p>
                       <p className="text-[18px] mt-1 font-medium">{data.eventInfo.time}</p>
+                      <div className="mx-auto mt-3 h-px w-80 bg-[color:var(--key)]/45" aria-hidden />
                     </div>
                 </div>
-                <div className="mx-[40px] mt-0 h-px w-80 bg-[color:var(--key)]/45" aria-hidden />
                 <div className="mx-10">
                   <div className="grid grid-cols-7 gap-1 px-0 text-center text-[clamp(12px,1.2vw,12px)] text-[color:var(--on-primary-container)]/70">
                     {["일", "월", "화", "수", "목", "금", "토"].map((w) => (
@@ -2767,7 +2853,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                 </div>
                 {ddayMessage && (
                   <>
-                    <div className="mx-[40px] mt-0 h-px w-80 bg-[color:var(--key)]/45" aria-hidden />
+                    <div className="mx-auto mt-3 h-px w-80 bg-[color:var(--key)]/45" aria-hidden />
                     <div className="w-full text-center text-[16px] font-normal text-on-surface-10 leading-none">
                       {ddayMessage}
                     </div>
@@ -2913,15 +2999,17 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                     )}
                     {/* 미리보기에서는 지도 상호작용(드래그/확대/축소) 비활성화 */}
                     <div className="absolute inset-0 z-10" aria-hidden />
+                    {/* 지도 우측 상단 줌 컨트롤(+/-) 비노출 처리 */}
+                    <div className="absolute right-2 top-2 z-20 h-20 w-10 rounded-md bg-[color:var(--surface-20)]" aria-hidden />
                   </div>
 
                   {/* 하단 앱 전송 바 (캡처 스타일) */}
                   {appLinks && (
-                    <div className="preview-map-app-links w-full bg-[color:var(--surface-10)] border-t border-black/5 grid grid-cols-3 divide-x divide-black/10 text-[13px]">
+                    <div className="w-full bg-[color:var(--surface-10)] border-t border-black/5 grid grid-cols-3 divide-x divide-black/10 text-[13px]">
                       <a
                         href={appLinks.naver.scheme}
                         onClick={openAppOrWeb(appLinks.naver.scheme, appLinks.naver.web)}
-                        className="h-12 flex items-center justify-center gap-1 text-on-surface-10 min-w-0 px-2"
+                        className="h-12 flex items-center justify-center gap-2 text-on-surface-10 min-w-0 px-2"
                       >
                         <span className="w-6 h-6 rounded-md bg-white border border-black/10 flex items-center justify-center text-[12px] font-bold text-green-600">
                           N
@@ -2931,7 +3019,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                       <a
                         href={appLinks.kakao.scheme}
                         onClick={openAppOrWeb(appLinks.kakao.scheme, appLinks.kakao.web)}
-                        className="h-12 flex items-center justify-center gap-1 text-on-surface-10 min-w-0 px-2"
+                        className="h-12 flex items-center justify-center gap-2 text-on-surface-10 min-w-0 px-2"
                       >
                         <span className="w-6 h-6 rounded-md bg-[#FEE500] border border-black/10 flex items-center justify-center text-[12px] font-black text-black">
                           K
@@ -2941,7 +3029,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                       <a
                         href={appLinks.tmap.scheme}
                         onClick={openAppOrWeb(appLinks.tmap.scheme, appLinks.tmap.web)}
-                        className="h-12 flex items-center justify-center gap-1 text-on-surface-10 min-w-0 px-2"
+                        className="h-12 flex items-center justify-center gap-2 text-on-surface-10 min-w-0 px-2"
                       >
                         <span className="w-6 h-6 rounded-md bg-white border border-black/10 flex items-center justify-center text-[12px] font-black text-[#4B6BFF]">
                           T
@@ -3217,7 +3305,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
         const masterPassword = ((data.guestbook as any)?.password ?? "").trim();
         const orderedEntries = entries;
         const perPageRaw = Number((data.guestbook as any)?.displayCount ?? 5);
-        const perPage = perPageRaw === 7 || perPageRaw === 10 ? perPageRaw : 5;
+        const perPage = perPageRaw === 3 || perPageRaw === 5 || perPageRaw === 7 ? perPageRaw : 5;
         const totalPages = Math.max(1, Math.ceil(orderedEntries.length / perPage));
         const currentPage = Math.min(guestbookPreviewPage, totalPages);
         const pagedEntries = orderedEntries.slice((currentPage - 1) * perPage, currentPage * perPage);
@@ -3384,7 +3472,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                 </Button>
               </>
             )}
-            {guestbookComposerOpen && previewPortalContainer &&
+            {guestbookComposerOpen && previewFrameRef.current &&
               createPortal(
                 <div
                   className="absolute inset-0 z-40 bg-black/45 p-4 flex items-center justify-center"
@@ -3461,7 +3549,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                     </div>
                   </div>
                 </div>,
-                previewPortalContainer
+                previewFrameRef.current
               )}
             <div className="flex flex-wrap gap-2 text-[0.75em] text-on-surface-30">
               {hasPassword && <span>비밀번호 보호</span>}
@@ -3645,7 +3733,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
               const isDisabled = item.hasSwitch && !isSectionEnabled(item.id);
               return (
                 <div 
-                  key={item.id} onClick={() => { if (item.id === 'bgm' || !isDisabled) scrollToSection(item.id); }}
+                  key={item.id} onClick={() => scrollToSection(item.id)}
                   data-sidebar-item-id={item.id}
                   className={`flex flex-col items-center justify-center gap-y-1 w-[80px] h-[64px] rounded-lg cursor-pointer transition-colors shadow-none ${
                     isDisabled
@@ -3725,7 +3813,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           style={{ width: editorWidth }}
         >
           <div ref={editorScrollRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scroll-smooth no-scrollbar">
-            <div className="px-4 pt-4 pb-0 bg-[color:var(--surface-20)]">
+            <div className="px-4 pt-4 pb-2 bg-[color:var(--surface-20)]">
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
                 {invitationTabs.map((tab) => {
                   const isActive = tab.id === activeInvitationTabId;
@@ -3748,18 +3836,18 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                               setEditingInvitationTabName("");
                             }
                           }}
-                          className="h-10 w-[120px] rounded-lg border border-[color:var(--key)] bg-white px-2 text-xs font-semibold text-[color:var(--key)] outline-none"
+                          className="h-8 w-[120px] rounded-lg border border-[color:var(--key)] bg-white px-2 text-xs font-semibold text-[color:var(--key)] outline-none"
                         />
                       ) : (
                         <div
-                          className={`inline-flex h-10 shrink-0 items-center rounded-lg border bg-white transition-all ${
+                          className={`inline-flex h-8 shrink-0 items-center rounded-lg border bg-white transition-all ${
                             isActive ? "border-[color:var(--key)] text-[color:var(--key)]" : "border-border text-on-surface-20"
                           }`}
                         >
                           <button
                             type="button"
                             onClick={() => switchInvitationTab(tab.id)}
-                            className={`h-full min-h-[40px] px-3 text-xs font-semibold ${isActive ? "text-[color:var(--key)]" : "text-on-surface-20"}`}
+                            className={`h-full px-3 text-xs font-semibold ${isActive ? "text-[color:var(--key)]" : "text-on-surface-20"}`}
                           >
                             {tab.label}
                           </button>
@@ -3771,22 +3859,22 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                             <button
                               type="button"
                               onClick={() => startEditInvitationTabName(tab.id, tab.label)}
-                              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border bg-white text-on-surface-20 hover:bg-slate-50"
+                              className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border bg-white text-on-surface-20 hover:bg-slate-50"
                               aria-label={`${tab.label} 탭 이름 수정`}
                               title="탭 이름 수정"
                             >
-                              <Pencil className="h-3.5 w-3.5" />
+                              <Pencil className="h-3 w-3" />
                             </button>
                             {!isDefaultTab ? (
                               <button
                                 type="button"
-                                onClick={() => setInvitationTabRemoveConfirmId(tab.id)}
+                                onClick={() => removeInvitationTab(tab.id)}
                                 disabled={invitationTabs.length <= 1}
-                                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border bg-white text-on-surface-20 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border bg-white text-on-surface-20 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                                 aria-label={`${tab.label} 탭 제거`}
                                 title={invitationTabs.length <= 1 ? "탭은 최소 1개 유지됩니다" : "탭 제거"}
                               >
-                                <Trash2 className="h-3.5 w-3.5" />
+                                <Trash2 className="h-3 w-3" />
                               </button>
                             ) : null}
                           </div>
@@ -3798,60 +3886,12 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                 <button
                   type="button"
                   onClick={addInvitationTab}
-                  className="inline-flex h-10 shrink-0 items-center rounded-lg border border-dashed border-border bg-white px-3 text-xs font-semibold text-on-surface-20 hover:bg-slate-50"
+                  className="inline-flex h-8 shrink-0 items-center rounded-lg border border-dashed border-border bg-white px-3 text-xs font-semibold text-on-surface-20 hover:bg-slate-50"
                 >
                   + 탭 추가
                 </button>
               </div>
             </div>
-            {invitationTabRemoveConfirmId !== null &&
-              createPortal(
-                <div
-                  className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
-                  onClick={() => setInvitationTabRemoveConfirmId(null)}
-                  role="presentation"
-                >
-                  <div
-                    className="w-full max-w-sm rounded-2xl bg-white border border-[color:var(--border-10)] p-6 flex flex-col gap-4 shadow-lg"
-                    onClick={(e) => e.stopPropagation()}
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="invitation-tab-remove-title"
-                  >
-                    <h3 id="invitation-tab-remove-title" className="text-[15px] font-semibold text-on-surface-10">
-                      탭 삭제
-                    </h3>
-                    <p className="text-[13px] text-on-surface-20 leading-relaxed">
-                      &quot;
-                      {invitationTabs.find((t) => t.id === invitationTabRemoveConfirmId)?.label ?? ""}
-                      &quot; 탭을 삭제할까요? 이 탭의 편집 내용은 복구할 수 없습니다.
-                    </p>
-                    <div className="flex justify-end gap-2 pt-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-10 px-5 rounded-lg text-[14px] font-semibold border-[color:var(--border-30)] bg-white text-on-surface-20 hover:bg-slate-50"
-                        onClick={() => setInvitationTabRemoveConfirmId(null)}
-                      >
-                        취소
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        className="h-10 px-5 rounded-lg text-[14px] font-semibold"
-                        onClick={() => {
-                          if (invitationTabRemoveConfirmId === null) return;
-                          removeInvitationTab(invitationTabRemoveConfirmId);
-                          setInvitationTabRemoveConfirmId(null);
-                        }}
-                      >
-                        삭제
-                      </Button>
-                    </div>
-                  </div>
-                </div>,
-                document.body,
-              )}
             <div
               className="p-4 flex-1 flex flex-col gap-3 [&>div]:p-0"
               style={{ backgroundColor: 'var(--surface-20)' }}
@@ -3930,7 +3970,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                   </div>
 
                   {isInitiallyExpanded && (!item.hasSwitch || isSectionEnabled(item.id)) && (
-                    <div className="p-6 bg-white flex flex-col gap-5 border-t border-border">
+                    <div className="p-6 bg-white flex flex-col gap-3 border-t border-border">
                       {/* 테마 섹션 */}
                       {item.id === 'theme' && (
                         <>
@@ -4584,9 +4624,9 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                         </>
                       )}
 
-                      {/* 신랑신부 섹션 (입력 폼 + 요약 레이아웃) */}
+                      {/* 신랑신부 섹션 (이름·관계 입력) */}
                       {item.id === 'hosts' && (
-                        <>
+                        <div className="flex flex-col gap-5">
                           <FormItem label="옵션">
                             <span
                               role="button"
@@ -4660,104 +4700,154 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                               </div>
                             </FormItem>
                           )}
+                          <HostContactField
+                            label="신랑"
+                            nameValue={data.hosts.groom.name}
+                            onNameChange={(value) => updateData('hosts.groom.name', value)}
+                            relationValue={data.hosts.groom.relation}
+                            onRelationChange={(value) => updateData('hosts.groom.relation', value)}
+                            relationOptions={GROOM_RELATION_OPTIONS}
+                            showPhone={false}
+                          />
+                          <HostContactField
+                            label="부"
+                            nameValue={data.hosts.groom.father.name}
+                            onNameChange={(value) => updateData('hosts.groom.father.name', value)}
+                            showPhone={false}
+                            deceasedChecked={data.hosts.groom.father.isDeceased}
+                            onDeceasedChange={(checked) => updateData('hosts.groom.father.isDeceased', checked)}
+                            keepDeceasedInline
+                          />
+                          <HostContactField
+                            label="모"
+                            nameValue={data.hosts.groom.mother.name}
+                            onNameChange={(value) => updateData('hosts.groom.mother.name', value)}
+                            showPhone={false}
+                            deceasedChecked={data.hosts.groom.mother.isDeceased}
+                            onDeceasedChange={(checked) => updateData('hosts.groom.mother.isDeceased', checked)}
+                            keepDeceasedInline
+                          />
                           <div className="border-t border-dashed border-[color:var(--border-20)] my-2" />
-                          <div className="flex flex-col gap-5">
-                            <FormItem label="옵션">
-                              <div className="flex-1 flex flex-col gap-3">
-                                <span
-                                  role="button"
-                                  tabIndex={0}
-                                  className="inline-flex items-center gap-2 text-[13px] text-on-surface-20 select-none cursor-pointer"
-                                  onClick={() => {
-                                    const nextChecked = !isSectionEnabled('contact');
-                                    setSectionEnabled((prev) => ({ ...prev, contact: nextChecked }));
+                          <HostContactField
+                            label="신부"
+                            nameValue={data.hosts.bride.name}
+                            onNameChange={(value) => updateData('hosts.bride.name', value)}
+                            relationValue={data.hosts.bride.relation}
+                            onRelationChange={(value) => updateData('hosts.bride.relation', value)}
+                            relationOptions={BRIDE_RELATION_OPTIONS}
+                            showPhone={false}
+                          />
+                          <HostContactField
+                            label="부"
+                            nameValue={data.hosts.bride.father.name}
+                            onNameChange={(value) => updateData('hosts.bride.father.name', value)}
+                            showPhone={false}
+                            deceasedChecked={data.hosts.bride.father.isDeceased}
+                            onDeceasedChange={(checked) => updateData('hosts.bride.father.isDeceased', checked)}
+                            keepDeceasedInline
+                          />
+                          <HostContactField
+                            label="모"
+                            nameValue={data.hosts.bride.mother.name}
+                            onNameChange={(value) => updateData('hosts.bride.mother.name', value)}
+                            showPhone={false}
+                            deceasedChecked={data.hosts.bride.mother.isDeceased}
+                            onDeceasedChange={(checked) => updateData('hosts.bride.mother.isDeceased', checked)}
+                            keepDeceasedInline
+                          />
+                        </div>
+                      )}
+
+                      {/* 연락처 섹션 */}
+                      {item.id === 'contact' && (
+                        <>
+                          <FormItem label="옵션">
+                            <div className="flex-1 flex flex-col gap-3">
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                className="inline-flex items-center gap-2 text-[13px] text-on-surface-20 select-none cursor-pointer"
+                                onClick={() => {
+                                  const nextChecked = !isSectionEnabled('contactParents');
+                                  setSectionEnabled((prev) => ({ ...prev, contactParents: nextChecked }));
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    const nextChecked = !isSectionEnabled('contactParents');
+                                    setSectionEnabled((prev) => ({ ...prev, contactParents: nextChecked }));
+                                  }
+                                }}
+                              >
+                                <CircleCheckbox
+                                  checked={isSectionEnabled('contactParents')}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    setSectionEnabled((prev) => ({ ...prev, contactParents: checked }));
                                   }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter' || e.key === ' ') {
-                                      const nextChecked = !isSectionEnabled('contact');
-                                      setSectionEnabled((prev) => ({ ...prev, contact: nextChecked }));
-                                    }
-                                  }}
-                                >
-                                  <CircleCheckbox
-                                    checked={isSectionEnabled('contact')}
-                                    onChange={(e) => {
-                                      const checked = e.target.checked;
-                                      setSectionEnabled((prev) => ({ ...prev, contact: checked }));
-                                    }}
-                                  />
-                                  연락처 추가
-                                </span>
-                              </div>
-                            </FormItem>
-                            <HostContactField
-                              label="신랑"
-                              nameValue={data.hosts.groom.name}
-                              onNameChange={(value) => updateData('hosts.groom.name', value)}
-                              relationValue={data.hosts.groom.relation}
-                              onRelationChange={(value) => updateData('hosts.groom.relation', value)}
-                              relationOptions={GROOM_RELATION_OPTIONS}
-                              phoneValue={data.hosts.groom.phone}
-                              onPhoneChange={(value) => updateData('hosts.groom.phone', value)}
-                              showPhone={isSectionEnabled('contact')}
-                            />
-                            <HostContactField
-                              label="부"
-                              nameValue={data.hosts.groom.father.name}
-                              onNameChange={(value) => updateData('hosts.groom.father.name', value)}
-                              phoneValue={data.hosts.groom.father.phone}
-                              onPhoneChange={(value) => updateData('hosts.groom.father.phone', value)}
-                              showPhone={isSectionEnabled('contact') && !data.hosts.groom.father.isDeceased}
-                              deceasedChecked={data.hosts.groom.father.isDeceased}
-                              onDeceasedChange={(checked) => updateData('hosts.groom.father.isDeceased', checked)}
-                              keepDeceasedInline
-                            />
-                            <HostContactField
-                              label="모"
-                              nameValue={data.hosts.groom.mother.name}
-                              onNameChange={(value) => updateData('hosts.groom.mother.name', value)}
-                              phoneValue={data.hosts.groom.mother.phone}
-                              onPhoneChange={(value) => updateData('hosts.groom.mother.phone', value)}
-                              showPhone={isSectionEnabled('contact') && !data.hosts.groom.mother.isDeceased}
-                              deceasedChecked={data.hosts.groom.mother.isDeceased}
-                              onDeceasedChange={(checked) => updateData('hosts.groom.mother.isDeceased', checked)}
-                              keepDeceasedInline
-                            />
-                            <div className="border-t border-dashed border-[color:var(--border-20)] my-2" />
-                            <HostContactField
-                              label="신부"
-                              nameValue={data.hosts.bride.name}
-                              onNameChange={(value) => updateData('hosts.bride.name', value)}
-                              relationValue={data.hosts.bride.relation}
-                              onRelationChange={(value) => updateData('hosts.bride.relation', value)}
-                              relationOptions={BRIDE_RELATION_OPTIONS}
-                              phoneValue={data.hosts.bride.phone}
-                              onPhoneChange={(value) => updateData('hosts.bride.phone', value)}
-                              showPhone={isSectionEnabled('contact')}
-                            />
-                            <HostContactField
-                              label="부"
-                              nameValue={data.hosts.bride.father.name}
-                              onNameChange={(value) => updateData('hosts.bride.father.name', value)}
-                              phoneValue={data.hosts.bride.father.phone}
-                              onPhoneChange={(value) => updateData('hosts.bride.father.phone', value)}
-                              showPhone={isSectionEnabled('contact') && !data.hosts.bride.father.isDeceased}
-                              deceasedChecked={data.hosts.bride.father.isDeceased}
-                              onDeceasedChange={(checked) => updateData('hosts.bride.father.isDeceased', checked)}
-                              keepDeceasedInline
-                            />
-                            <HostContactField
-                              label="모"
-                              nameValue={data.hosts.bride.mother.name}
-                              onNameChange={(value) => updateData('hosts.bride.mother.name', value)}
-                              phoneValue={data.hosts.bride.mother.phone}
-                              onPhoneChange={(value) => updateData('hosts.bride.mother.phone', value)}
-                              showPhone={isSectionEnabled('contact') && !data.hosts.bride.mother.isDeceased}
-                              deceasedChecked={data.hosts.bride.mother.isDeceased}
-                              onDeceasedChange={(checked) => updateData('hosts.bride.mother.isDeceased', checked)}
-                              keepDeceasedInline
-                            />
-                          </div>
+                                />
+                                부모님 연락처
+                              </span>
+                            </div>
+                          </FormItem>
+                          {isSectionEnabled('contact') && (
+                            <div className="flex flex-col gap-4">
+                              <ContactPhoneField
+                                label="신랑"
+                                name={data.hosts.groom.name || '신랑'}
+                                phoneValue={data.hosts.groom.phone}
+                                onPhoneChange={(value) => updateData('hosts.groom.phone', value)}
+                              />
+                              {isSectionEnabled('contactParents') &&
+                                !data.hosts.groom.father.isDeceased &&
+                                (data.hosts.groom.father.name ?? '').trim().length > 0 && (
+                                <ContactPhoneField
+                                  label="신랑 부"
+                                  name={data.hosts.groom.father.name}
+                                  phoneValue={data.hosts.groom.father.phone}
+                                  onPhoneChange={(value) => updateData('hosts.groom.father.phone', value)}
+                                />
+                              )}
+                              {isSectionEnabled('contactParents') &&
+                                !data.hosts.groom.mother.isDeceased &&
+                                (data.hosts.groom.mother.name ?? '').trim().length > 0 && (
+                                <ContactPhoneField
+                                  label="신랑 모"
+                                  name={data.hosts.groom.mother.name}
+                                  phoneValue={data.hosts.groom.mother.phone}
+                                  onPhoneChange={(value) => updateData('hosts.groom.mother.phone', value)}
+                                />
+                              )}
+                              {isSectionEnabled('contactParents') && (
+                                <div className="border-t border-dashed border-[color:var(--border-20)] my-1" />
+                              )}
+                              <ContactPhoneField
+                                label="신부"
+                                name={data.hosts.bride.name || '신부'}
+                                phoneValue={data.hosts.bride.phone}
+                                onPhoneChange={(value) => updateData('hosts.bride.phone', value)}
+                              />
+                              {isSectionEnabled('contactParents') &&
+                                !data.hosts.bride.father.isDeceased &&
+                                (data.hosts.bride.father.name ?? '').trim().length > 0 && (
+                                <ContactPhoneField
+                                  label="신부 부"
+                                  name={data.hosts.bride.father.name}
+                                  phoneValue={data.hosts.bride.father.phone}
+                                  onPhoneChange={(value) => updateData('hosts.bride.father.phone', value)}
+                                />
+                              )}
+                              {isSectionEnabled('contactParents') &&
+                                !data.hosts.bride.mother.isDeceased &&
+                                (data.hosts.bride.mother.name ?? '').trim().length > 0 && (
+                                <ContactPhoneField
+                                  label="신부 모"
+                                  name={data.hosts.bride.mother.name}
+                                  phoneValue={data.hosts.bride.mother.phone}
+                                  onPhoneChange={(value) => updateData('hosts.bride.mother.phone', value)}
+                                />
+                              )}
+                            </div>
+                          )}
                         </>
                       )}
 
@@ -5928,7 +6018,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                           </FormItem>
                           <FormItem label="노출 수">
                             <div className="flex flex-wrap gap-2">
-                              {([5, 7, 10] as const).map((count) => (
+                              {([3, 5, 7] as const).map((count) => (
                                 <OptionChip
                                   key={count}
                                   label={`${count}개`}
@@ -6436,13 +6526,6 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                         </>
                       )}
 
-                      {/* 아직 구체화되지 않은 나머지 섹션들의 플레이스홀더 */}
-                      {!['theme', 'bgm', 'main', 'hosts', 'eventInfo', 'greeting', 'account', 'location', 'gallery', 'notice', 'guestbook', 'rsvp', 'youtube', 'guestUpload', 'share', 'protect', 'publish', 'i18n'].includes(item.id) && (
-                        <div className="h-20 flex items-center justify-center text-on-surface-30 text-sm bg-slate-50 rounded-lg border border-dashed border-border">
-                          {item.label} 세부 입력 폼이 조립될 영역입니다.
-                        </div>
-                      )}
-
                     </div>
                   )}
                 </div>
@@ -6490,7 +6573,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           {/* 바깥 컨테이너는 고정, 내부 프레임만 스크롤 */}
           <div className="flex-1 min-h-0 flex justify-center w-full max-w-[400px] min-h-full bg-transparent items-stretch shadow-none">
             <div
-              ref={setPreviewFrameNode}
+              ref={previewFrameRef}
               className="preview-font-floor w-full border border-border rounded-lg bg-white flex flex-col items-stretch text-center overflow-hidden relative"
               style={
                 {
@@ -6516,42 +6599,23 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                 themeColor={selectedKeyColorPreset.key}
               />
               <div ref={previewScrollRef} className="flex-1 overflow-y-auto no-scrollbar">
-                {mergeMainAndHostsIntro ? (
+                {layoutOrder.includes('hosts') && (
                   <div
                     data-preview-section-id="main"
-                    className={`w-full flex flex-col items-stretch text-center mb-0 ${data.theme.scrollEffect
+                    className={`w-full flex flex-col items-stretch text-center ${data.theme.scrollEffect
                       ? (previewVisibleSections.main
                         ? 'opacity-100 translate-y-0 duration-[750ms] ease-out'
                         : 'opacity-0 translate-y-3 duration-[750ms] ease-out')
                       : 'opacity-100 translate-y-0'
                     } transition-[opacity,transform]`}
                   >
-                    <HostsIntroPreview data={data} hero={renderPreviewSection('main')} />
+                    <HostsIntroPreview
+                      data={data}
+                      hero={layoutOrder.includes('main') ? renderPreviewSection('main') : undefined}
+                    />
                   </div>
-                ) : (
-                  <>
-                    {layoutOrder.includes('main') && (
-                      <div
-                        data-preview-section-id="main"
-                        className={`w-full flex flex-col items-stretch text-center ${data.theme.scrollEffect
-                          ? (previewVisibleSections.main
-                            ? 'opacity-100 translate-y-0 duration-[750ms] ease-out'
-                            : 'opacity-0 translate-y-3 duration-[750ms] ease-out')
-                          : 'opacity-100 translate-y-0'
-                        } transition-[opacity,transform]`}
-                      >
-                        {renderPreviewSection('main')}
-                      </div>
-                    )}
-                    {layoutOrder.includes('hosts') && (
-                      <div className="w-full py-[50px] px-6 flex flex-col items-center text-center">
-                        <HostsIntroPreview data={data} />
-                      </div>
-                    )}
-                  </>
                 )}
-                {layoutOrder.filter((sectionId) => sectionId !== 'main').map((sectionId) => {
-                  const previewRenderId = sectionId === 'hosts' ? 'contact' : sectionId;
+                {layoutOrder.filter((sectionId) => sectionId !== 'main' && sectionId !== 'hosts').map((sectionId) => {
                   return (
                     <React.Fragment key={sectionId}>
                       <div
@@ -6560,8 +6624,6 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                           ? "w-full flex flex-col items-stretch text-center"
                           : sectionId === 'eventInfo' && (data.eventInfo as any)?.useCalendar
                             ? "w-full p-0 flex flex-col items-center text-center"
-                          : sectionId === 'greeting'
-                            ? "w-full py-[60px] px-6 flex flex-col items-center text-center"
                           : "w-full py-[50px] px-6 flex flex-col items-center text-center"
                           } ${data.theme.scrollEffect
                             ? (previewVisibleSections[sectionId]
@@ -6570,7 +6632,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                             : 'opacity-100 translate-y-0'
                           } transition-[opacity,transform]`}
                       >
-                        {renderPreviewSection(previewRenderId)}
+                        {renderPreviewSection(sectionId)}
                       </div>
                     </React.Fragment>
                   );
@@ -6875,15 +6937,15 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
         <DialogContent className="w-[680px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border p-0 overflow-hidden">
           <div className="p-5 border-b border-border bg-white">
             <DialogTitle className="text-[16px] font-semibold text-on-surface-10">
-              웨딩 썸네일 선택
+              기본 일러스트 썸네일 선택
             </DialogTitle>
             <div className="text-[12px] text-on-surface-30 mt-1">
-              초대장에 어울리는 이미지를 고르면 공유 썸네일로 적용됩니다.
+              원하는 썸네일을 클릭하면 공유 썸네일로 적용됩니다.
             </div>
           </div>
           <div className="p-5 bg-[color:var(--surface-10)]">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {SHARE_THUMBNAIL_PRESETS.map((t) => {
+            <div className="grid grid-cols-4 gap-3">
+              {shareThumbnailPresets.map((t) => {
                 const selected = data.share?.thumbnail === t.url;
                 return (
                   <button

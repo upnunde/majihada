@@ -227,7 +227,7 @@ function HostsIntroPreviewHeroC({ base, hero }: { base: HostsIntroPreviewBase; h
     "text-[clamp(22px,6vw,34px)] font-light tabular-nums tracking-tight shrink-0 text-center";
   return (
     <div className="w-full flex flex-col justify-start items-center pt-0">
-      <div className="px-6 py-0 w-full max-w-[340px] flex flex-col items-center mt-[50px] mb-5">
+      <div className="px-6 py-0 w-full max-w-[340px] flex flex-col items-center mt-[60px] mb-5">
         <div className="flex flex-row items-center justify-center gap-10 w-full font-serif">
           <span className={dateSideClassName} style={dateSideStyle}>
             {mm}
@@ -376,7 +376,7 @@ function HostsIntroPreviewHeroE({ base, hero }: { base: HostsIntroPreviewBase; h
             className="h-10 w-10 shrink-0 mb-3"
             aria-hidden
           />
-          <p className="text-[1.25em] font-medium tracking-[0.08em]" style={{ color: titleColor }}>
+          <p className="text-[1.5em] font-medium tracking-[0.08em]" style={{ color: titleColor }}>
             {firstName}{" "}
             <span className="inline-block opacity-40 mx-0.5 font-normal text-[0.9em]" aria-hidden>
               &

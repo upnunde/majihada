@@ -27,4 +27,5 @@ export const MAIN_IMAGE_PRESETS = [
   },
 ] as const;
 
-export const DEFAULT_MAIN_PRESET_URL = MAIN_IMAGE_PRESETS[0].url;
+export const DEFAULT_MAIN_PRESET_URL =
+  MAIN_IMAGE_PRESETS.find((preset) => preset.id === "romantic")?.url ?? MAIN_IMAGE_PRESETS[0].url;

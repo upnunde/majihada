@@ -275,7 +275,7 @@ export const useCardStore = create<CardStore>((set) => ({
     main: {
       image: 'https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=800&auto=format&fit=crop',
       images: [],
-      title: '김민준 ♥ 박서연 결혼식',
+      title: '신동주 ♥ 김민선 결혼식',
       titleColor: '#333333',
       bodyColor: '#666666',
       animation: '없음',
@@ -287,12 +287,12 @@ export const useCardStore = create<CardStore>((set) => ({
     },
     hosts: {
       groom: { 
-        name: '김민준', phone: '010-0000-0000', relation: '장남',
+        name: '신동주', phone: '010-0000-0000', relation: '장남',
         father: { name: '', phone: '', isDeceased: false, isOn: true },
         mother: { name: '', phone: '', isDeceased: false, isOn: true }
       },
       bride: { 
-        name: '박서연', phone: '010-1111-1111', relation: '장녀',
+        name: '김민선', phone: '010-1111-1111', relation: '장녀',
         father: { name: '', phone: '', isDeceased: false, isOn: true },
         mother: { name: '', phone: '', isDeceased: false, isOn: true }
       },
@@ -360,7 +360,7 @@ export const useCardStore = create<CardStore>((set) => ({
     share: {
       useThumbnail: true,
       thumbnail: '',
-      title: '김민준 ♥ 박서연 결혼식',
+      title: '신동주 ♥ 김민선 결혼식',
       description: '서로가 마주보며 다져온 사랑을 이제 함께 한 곳을 바라보며 걸어가고자 합니다.',
       link: '',
       enableCopy: true,
