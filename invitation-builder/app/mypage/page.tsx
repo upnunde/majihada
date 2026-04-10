@@ -38,13 +38,15 @@ export default function MyPage() {
       const raw = window.localStorage.getItem("mcard:lastDraft");
       if (!raw) return;
       const draft = JSON.parse(raw) as { id?: string; title?: string; deleteAt?: string; status?: string };
-      if (!draft?.id || !draft?.title) return;
+      const draftId = draft?.id;
+      const draftTitle = draft?.title;
+      if (!draftId || !draftTitle) return;
       setInvitations((prev) => {
-        if (prev.some((item) => item.id === draft.id)) return prev;
+        if (prev.some((item) => item.id === draftId)) return prev;
         return [
           {
-            id: draft.id,
-            title: draft.title,
+            id: draftId,
+            title: draftTitle,
             code: "DRAFT",
             deleteAt: draft.deleteAt || "저장 직후",
             status: draft.status || "결제 전",
