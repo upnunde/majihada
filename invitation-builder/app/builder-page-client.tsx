@@ -8,6 +8,7 @@ import AppHeader from '@/components/AppHeader';
 import type { CardData } from "../store/useCardStore";
 import { DEFAULT_MAIN_PRESET_URL, MAIN_IMAGE_PRESETS } from "@/lib/main-image-presets";
 import { SHARE_THUMBNAIL_PRESETS } from "@/lib/share-thumbnail-presets";
+import { HostsIntroPreview } from "./hosts-intro-preview";
 
 const DEFAULT_LOCATION_PREVIEW_COORDS = { lat: 37.579617, lon: 126.977041 }; // 경복궁
 
@@ -43,362 +44,6 @@ function normalizeMainImageMode(m: unknown): 'single' | 'multi' | 'default' {
   if (m === 'single' || m === 'multi' || m === 'default') return m;
   if (m === 'none') return 'default';
   return 'single';
-}
-
-/** 이름·일정·장소 블록 — 인트로 타입(A~E). `hero`가 있으면 메인 이미지와 한 묶음으로 배치 */
-function HostsIntroPreview({ data, hero }: { data: CardData; hero?: React.ReactNode }) {
-  const introType = ((data.main as any).introType ?? "A") as "A" | "B" | "C" | "D" | "E";
-  const titleColor = data.main.titleColor;
-  const bodyColor = data.main.bodyColor;
-  const brideFirst = !!(data as any).i18n?.brideFirstInfo;
-  const groom = (data.hosts.groom.name ?? "").trim() || "신랑";
-  const bride = (data.hosts.bride.name ?? "").trim() || "신부";
-  const firstName = brideFirst ? bride : groom;
-  const secondName = brideFirst ? groom : bride;
-  const eventDateText = (data.eventInfo.date ?? "").trim();
-  const eventDate = eventDateText ? new Date(`${eventDateText}T00:00:00`) : null;
-  const hasValidDate = !!eventDate && Number.isFinite(eventDate.getTime());
-  const weekdayKo = hasValidDate ? ["일", "월", "화", "수", "목", "금", "토"][eventDate!.getDay()] : "";
-  const summaryDateLine = hasValidDate
-    ? `${eventDate!.getFullYear()}년 ${eventDate!.getMonth() + 1}월 ${eventDate!.getDate()}일 ${weekdayKo}요일`
-    : eventDateText;
-  const summaryTimeLine = (data.eventInfo.time ?? "").trim();
-  const venueName = String((data.eventInfo as any)?.venueName ?? "").trim();
-  const venueDetail = String((data.eventInfo as any)?.venueDetail ?? "").trim();
-  const venueDisplay = venueName
-    ? venueDetail && !venueName.includes(venueDetail)
-      ? `${venueName} ${venueDetail}`
-      : venueName
-    : "";
-  const yy = hasValidDate ? String(eventDate!.getFullYear()).slice(2) : "—";
-  const mm = hasValidDate ? String(eventDate!.getMonth() + 1).padStart(2, "0") : "—";
-  const dd = hasValidDate ? String(eventDate!.getDate()).padStart(2, "0") : "—";
-
-  const dateTimeLine = (
-    <>
-      {summaryDateLine}
-      {summaryTimeLine && ` ${summaryTimeLine}`}
-    </>
-  );
-
-  const venueBlock =
-    !!venueDisplay && (
-      <p className="text-[1em] leading-relaxed" style={{ color: bodyColor }}>
-        {venueDisplay}
-      </p>
-    );
-
-  /** 히어로는 라운드 없음. 타입별로 `full` 풀블리드 / `inset` 여백·채움 혼합 */
-  const renderHeroShell = (mode: "full" | "inset" = "full") => {
-    if (!hero) return null;
-    if (mode === "inset") {
-      return (
-        <div className="w-full max-w-[400px] mx-auto overflow-hidden rounded-none px-4 sm:px-6">
-          {hero}
-        </div>
-      );
-    }
-    return <div className="w-full overflow-hidden rounded-none">{hero}</div>;
-  };
-
-  const decoSideLine = (side: "left" | "right") => (
-    <div
-      className={`block w-px shrink-0 self-stretch min-h-[100px] sm:min-h-[120px] opacity-25 ${side === "left" ? "mr-0.5 sm:mr-1" : "ml-0.5 sm:ml-1"}`}
-      style={{ background: `linear-gradient(to bottom, transparent, ${titleColor}, transparent)` }}
-      aria-hidden
-    />
-  );
-
-  /* ---- 메인 이미지 + 인트로 통합 ---- */
-  if (hero) {
-    if (introType === "B") {
-      return (
-        <div className="w-full flex flex-col items-stretch">
-          <div className="px-5 pt-8 pb-2 flex flex-col items-center text-center gap-2">
-            <div className="flex items-baseline justify-center gap-2 sm:gap-3 font-serif">
-              <span className="text-[clamp(22px,6vw,30px)] font-light tabular-nums tracking-tight" style={{ color: titleColor }}>
-                {yy}
-              </span>
-              <span className="text-[14px] font-extralight opacity-35" style={{ color: bodyColor }}>
-                |
-              </span>
-              <span className="text-[clamp(22px,6vw,30px)] font-light tabular-nums tracking-tight" style={{ color: titleColor }}>
-                {mm}
-              </span>
-              <span className="text-[14px] font-extralight opacity-35" style={{ color: bodyColor }}>
-                |
-              </span>
-              <span className="text-[clamp(22px,6vw,30px)] font-light tabular-nums tracking-tight" style={{ color: titleColor }}>
-                {dd}
-              </span>
-            </div>
-            {hasValidDate && (
-              <p className="text-[13px] tracking-[0.3em] opacity-65" style={{ color: bodyColor }}>
-                {weekdayKo}요일
-              </p>
-            )}
-            <div className="w-12 h-px opacity-25 mt-2 mx-auto" style={{ backgroundColor: titleColor }} aria-hidden />
-          </div>
-          {/* B: 히어로는 가로 풀블리드, 상단 날짜만 패딩 + 구분 데코라인 */}
-          <div className="w-full">{renderHeroShell("full")}</div>
-          <div className="max-w-[340px] mx-auto w-full px-6 py-10 flex flex-col items-center text-center gap-4">
-            <p className="text-[1.05em] font-medium tracking-[0.04em]" style={{ color: titleColor }}>
-              {firstName}
-              <span className="mx-2 opacity-40">·</span>
-              {secondName}
-            </p>
-            <div className="space-y-2 w-full">
-              <p className="text-[0.95em] leading-relaxed" style={{ color: bodyColor }}>
-                {dateTimeLine}
-              </p>
-              {venueBlock}
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    if (introType === "C") {
-      return (
-        <div className="w-full flex flex-col items-stretch">
-          <div className="px-6 pt-8 flex flex-col items-center text-center gap-2">
-            <p className="text-[1.15em] font-medium tracking-[0.02em]" style={{ color: titleColor }}>
-              {firstName}
-            </p>
-            <div className="w-12 h-px opacity-35" style={{ backgroundColor: titleColor }} aria-hidden />
-            <p className="text-[1.15em] font-medium tracking-[0.02em]" style={{ color: titleColor }}>
-              {secondName}
-            </p>
-          </div>
-          {/* C: 히어로는 인셋(좌우 여백)으로 카드형 채움 */}
-          <div className="mt-5 w-full">{renderHeroShell("inset")}</div>
-          <div className="max-w-[340px] mx-auto w-full px-6 py-8 space-y-2 text-center">
-            <div className="w-8 h-px mx-auto opacity-20 mb-3" style={{ backgroundColor: titleColor }} aria-hidden />
-            <p className="text-[1em] leading-relaxed" style={{ color: bodyColor }}>
-              {dateTimeLine}
-            </p>
-            {venueBlock}
-          </div>
-        </div>
-      );
-    }
-
-    if (introType === "D") {
-      return (
-        <div className="w-full flex flex-col items-stretch pt-10">
-          <div className="max-w-[340px] mx-auto w-full px-4 pt-0 flex flex-row items-center justify-center gap-2 text-center">
-            <p className="text-[22px] font-extralight flex-1 text-left leading-snug break-keep" style={{ color: bodyColor }}>
-              {firstName}
-            </p>
-            <div className="flex flex-col items-center justify-end shrink-0 px-1 min-w-[48px]">
-              <span className="text-[20px] font-semibold tabular-nums leading-none" style={{ color: titleColor }}>
-                {mm}
-              </span>
-              <div className="w-8 h-px my-1 opacity-35" style={{ backgroundColor: titleColor }} aria-hidden />
-              <span className="text-[20px] font-semibold tabular-nums leading-none" style={{ color: titleColor }}>
-                {dd}
-              </span>
-            </div>
-            <p className="text-[22px] font-extralight flex-1 text-center leading-snug break-keep" style={{ color: bodyColor }}>
-              {secondName}
-            </p>
-          </div>
-          {/* D: 좁은 바깥 여백 + 세로 데코 라인, 히어로는 중앙 풀블리드 */}
-          <div className="mt-4 flex flex-row items-stretch gap-0 px-1 sm:px-2">
-            {decoSideLine("left")}
-            <div className="flex-1 min-w-0">{renderHeroShell("full")}</div>
-            {decoSideLine("right")}
-          </div>
-          <div className="max-w-[340px] mx-auto w-full px-6 py-8 space-y-2 text-center">
-            <p className="text-[0.95em] leading-relaxed" style={{ color: bodyColor }}>
-              {dateTimeLine}
-            </p>
-            {venueBlock}
-          </div>
-        </div>
-      );
-    }
-
-    if (introType === "E") {
-      return (
-        <div className="w-full flex flex-col items-stretch">
-          <div className="px-8 pt-8 pb-2 flex flex-col items-center text-center">
-            <p className="text-[1.25em] font-medium tracking-[0.08em]" style={{ color: titleColor }}>
-              {firstName}{" "}
-              <span className="inline-block opacity-40 mx-0.5 font-normal text-[0.9em]" aria-hidden>
-                &
-              </span>{" "}
-              {secondName}
-            </p>
-            <div className="w-14 h-px opacity-30 mt-4 mx-auto" style={{ backgroundColor: titleColor }} aria-hidden />
-          </div>
-          {/* E: 제목은 패딩, 히어로는 가로 풀블리드 */}
-          <div className="w-full pt-3">{renderHeroShell("full")}</div>
-          <div className="max-w-[340px] mx-auto w-full px-6 py-9 space-y-1.5 text-[0.95em] text-center">
-            <p className="leading-relaxed" style={{ color: bodyColor }}>
-              {dateTimeLine}
-            </p>
-            {venueBlock}
-          </div>
-        </div>
-      );
-    }
-
-    /* A + hero: 이미지 → 텍스트 (이름 위 장식선, 양옆 여백) */
-    return (
-      <div className="w-full flex flex-col items-stretch">
-        <div className="w-full">{renderHeroShell("full")}</div>
-        <div className="max-w-[340px] mx-auto w-full px-6 py-[50px] space-y-5 text-center">
-          <div className="flex justify-center">
-            <div className="h-px w-12 opacity-25" style={{ backgroundColor: titleColor }} aria-hidden />
-          </div>
-          <p className="flex justify-center items-center text-[22px] font-medium tracking-[0.02em] leading-none" style={{ color: titleColor }}>
-            {firstName}
-            <span className="mx-2 inline-flex items-center align-middle leading-none" style={{ color: titleColor }}>
-              ·
-            </span>
-            {secondName}
-          </p>
-          <div className="space-y-2">
-            <p className="text-[1em] leading-relaxed whitespace-nowrap" style={{ color: bodyColor }}>
-              {dateTimeLine}
-            </p>
-            {venueBlock}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* ---- 텍스트만 (hosts만 켜진 경우 등) ---- */
-  if (introType === "B") {
-    return (
-      <div className="w-full max-w-[340px] mx-auto flex flex-col items-center text-center gap-4">
-        <div className="flex items-baseline justify-center gap-2 sm:gap-3 font-serif">
-          <span className="text-[clamp(26px,7vw,34px)] font-light tabular-nums tracking-tight" style={{ color: titleColor }}>
-            {yy}
-          </span>
-          <span className="text-[15px] font-extralight opacity-40" style={{ color: bodyColor }}>
-            |
-          </span>
-          <span className="text-[clamp(26px,7vw,34px)] font-light tabular-nums tracking-tight" style={{ color: titleColor }}>
-            {mm}
-          </span>
-          <span className="text-[15px] font-extralight opacity-40" style={{ color: bodyColor }}>
-            |
-          </span>
-          <span className="text-[clamp(26px,7vw,34px)] font-light tabular-nums tracking-tight" style={{ color: titleColor }}>
-            {dd}
-          </span>
-        </div>
-        {hasValidDate && (
-          <p className="text-[10px] tracking-[0.35em] uppercase opacity-70" style={{ color: bodyColor }}>
-            {weekdayKo}요일
-          </p>
-        )}
-        <p className="text-[1.05em] font-medium tracking-[0.04em]" style={{ color: titleColor }}>
-          {firstName}
-          <span className="mx-2 opacity-40">·</span>
-          {secondName}
-        </p>
-        <div className="space-y-2 w-full">
-          <p className="text-[0.95em] leading-relaxed" style={{ color: bodyColor }}>
-            {dateTimeLine}
-          </p>
-          {venueBlock}
-        </div>
-      </div>
-    );
-  }
-
-  if (introType === "C") {
-    return (
-      <div className="w-full max-w-[340px] mx-auto flex flex-col items-center text-center gap-3">
-        <p className="text-[1.2em] font-medium tracking-[0.02em]" style={{ color: titleColor }}>
-          {firstName}
-        </p>
-        <div className="w-10 h-px opacity-30" style={{ backgroundColor: titleColor }} aria-hidden />
-        <p className="text-[1.2em] font-medium tracking-[0.02em]" style={{ color: titleColor }}>
-          {secondName}
-        </p>
-        <div className="mt-2 space-y-2 w-full">
-          <p className="text-[1em] leading-relaxed" style={{ color: bodyColor }}>
-            {dateTimeLine}
-          </p>
-          {venueBlock}
-        </div>
-      </div>
-    );
-  }
-
-  if (introType === "D") {
-    return (
-      <div className="w-full max-w-[340px] mx-auto flex flex-col items-stretch text-center gap-5">
-        <div className="flex flex-row items-center justify-center gap-2 px-1">
-          <p className="text-[13px] flex-1 text-left leading-snug break-keep" style={{ color: bodyColor }}>
-            {firstName}
-          </p>
-          <div className="flex flex-col items-center justify-end shrink-0 px-1 min-w-[52px]">
-            <span className="text-[22px] font-semibold tabular-nums leading-none" style={{ color: titleColor }}>
-              {mm}
-            </span>
-            <div className="w-9 h-px my-1 opacity-35" style={{ backgroundColor: titleColor }} aria-hidden />
-            <span className="text-[22px] font-semibold tabular-nums leading-none" style={{ color: titleColor }}>
-              {dd}
-            </span>
-          </div>
-          <p className="text-[13px] flex-1 text-right leading-snug break-keep" style={{ color: bodyColor }}>
-            {secondName}
-          </p>
-        </div>
-        <div className="space-y-2">
-          <p className="text-[0.95em] leading-relaxed" style={{ color: bodyColor }}>
-            {dateTimeLine}
-          </p>
-          {venueBlock}
-        </div>
-      </div>
-    );
-  }
-
-  if (introType === "E") {
-    return (
-      <div className="w-full max-w-[340px] mx-auto flex flex-col items-center text-center gap-4">
-        <p className="text-[1.35em] font-medium tracking-[0.06em]" style={{ color: titleColor }}>
-          {firstName}{" "}
-          <span className="inline-block opacity-45 mx-0.5 font-normal text-[0.95em]" aria-hidden>
-            &
-          </span>{" "}
-          {secondName}
-        </p>
-        <div className="w-12 h-px opacity-25 mx-auto" style={{ backgroundColor: titleColor }} aria-hidden />
-        <div className="space-y-1.5 text-[0.95em] w-full">
-          <p className="leading-relaxed" style={{ color: bodyColor }}>
-            {dateTimeLine}
-          </p>
-          {venueBlock}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="w-full max-w-[340px] mx-auto space-y-5">
-      <p className="flex justify-center items-center text-[22px] font-medium tracking-[0.02em] leading-none" style={{ color: titleColor }}>
-        {firstName}
-        <span className="mx-2 inline-flex items-center align-middle leading-none" style={{ color: titleColor }}>
-          ·
-        </span>
-        {secondName}
-      </p>
-      <div className="space-y-2">
-        <p className="text-[1em] leading-relaxed whitespace-nowrap" style={{ color: bodyColor }}>
-          {dateTimeLine}
-        </p>
-        {venueBlock}
-      </div>
-    </div>
-  );
 }
 
 function AppLabel({
@@ -2621,7 +2266,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
         if (mode === 'default') {
           const presetUrl = String((data.main as any).presetImage ?? '').trim() || DEFAULT_MAIN_PRESET_URL;
           return (
-            <div className="w-full flex flex-col items-stretch gap-0">
+            <div className="w-full block p-0 m-0 leading-none">
               <div className="w-full aspect-square max-w-full mx-auto rounded-none overflow-hidden relative bg-[color:var(--surface-20)]">
                 <div
                   className="absolute inset-0 bg-center bg-cover"
@@ -2677,8 +2322,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
               : '';
 
         return (
-          <div className="w-full flex flex-col items-stretch gap-0">
-            <div className="w-full aspect-[3/4] rounded-none flex flex-col justify-end items-stretch text-white shadow-none overflow-hidden relative">
+          <div className="w-full block p-0 m-0 leading-none">
+            <div className="w-full aspect-[3/4] rounded-none shadow-none overflow-hidden relative bg-[color:var(--surface-20)]">
               {/* 배경 이미지 레이어 */}
               {transitionEffect === '디졸브' || transitionEffect === '크로스페이드' ? (
                 <>
@@ -3268,8 +2913,6 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                     )}
                     {/* 미리보기에서는 지도 상호작용(드래그/확대/축소) 비활성화 */}
                     <div className="absolute inset-0 z-10" aria-hidden />
-                    {/* 지도 우측 상단 줌 컨트롤(+/-) 비노출 처리 */}
-                    <div className="absolute right-2 top-2 z-20 h-20 w-10 rounded-md bg-[color:var(--surface-20)]" aria-hidden />
                   </div>
 
                   {/* 하단 앱 전송 바 (캡처 스타일) */}
@@ -4287,7 +3930,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                   </div>
 
                   {isInitiallyExpanded && (!item.hasSwitch || isSectionEnabled(item.id)) && (
-                    <div className="p-6 bg-white flex flex-col gap-3 border-t border-border">
+                    <div className="p-6 bg-white flex flex-col gap-5 border-t border-border">
                       {/* 테마 섹션 */}
                       {item.id === 'theme' && (
                         <>
@@ -6876,7 +6519,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                 {mergeMainAndHostsIntro ? (
                   <div
                     data-preview-section-id="main"
-                    className={`w-full flex flex-col items-stretch text-center ${data.theme.scrollEffect
+                    className={`w-full flex flex-col items-stretch text-center mb-0 ${data.theme.scrollEffect
                       ? (previewVisibleSections.main
                         ? 'opacity-100 translate-y-0 duration-[750ms] ease-out'
                         : 'opacity-0 translate-y-3 duration-[750ms] ease-out')
@@ -6917,6 +6560,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                           ? "w-full flex flex-col items-stretch text-center"
                           : sectionId === 'eventInfo' && (data.eventInfo as any)?.useCalendar
                             ? "w-full p-0 flex flex-col items-center text-center"
+                          : sectionId === 'greeting'
+                            ? "w-full py-[60px] px-6 flex flex-col items-center text-center"
                           : "w-full py-[50px] px-6 flex flex-col items-center text-center"
                           } ${data.theme.scrollEffect
                             ? (previewVisibleSections[sectionId]

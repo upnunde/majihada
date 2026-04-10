@@ -113,7 +113,7 @@ export default function ParticleCanvasOverlay({
         case "sparkle":
           return 27;
         case "heart":
-          return 17;
+          return Math.round(17 * 1.2);
         default:
           return 0;
       }
@@ -140,7 +140,9 @@ export default function ParticleCanvasOverlay({
     const exposureSizeMultiplier =
       targetEffect === "snow" || targetEffect === "sparkle" || targetEffect === "heart" ? 1.2 : 1;
     const sparkleSizeBoost = targetEffect === "sparkle" ? 1.2 : 1;
-    const heartSizeBoost = targetEffect === "heart" ? 1.3 : 1;
+    const heartSizeBoost = targetEffect === "heart" ? 1.3 * 1.2 : 1;
+    const sparkleHeartVyMult =
+      targetEffect === "sparkle" || targetEffect === "heart" ? 1.2 : 1;
 
     const randomPetalSpawn = () => ({
       x: rand(state.w * 1.02, state.w * 1.28),
@@ -163,7 +165,7 @@ export default function ParticleCanvasOverlay({
         vy: isPetal
           ? rand(0.22, 0.78)
           : kind === "sparkle" || kind === "heart"
-            ? rand(0.22, 0.62)
+            ? rand(0.22, 0.62) * sparkleHeartVyMult
             : rand(0.6, 1.7) * (kind === "snow" ? 1.0 : 1),
         size: size * exposureSizeMultiplier,
         rot: rand(0, Math.PI * 2),
@@ -344,7 +346,7 @@ export default function ParticleCanvasOverlay({
             p.kind === "petal"
               ? rand(0.22, 0.78)
               : p.kind === "sparkle" || p.kind === "heart"
-                ? rand(0.22, 0.62)
+                ? rand(0.22, 0.62) * sparkleHeartVyMult
                 : rand(0.6, 1.7) * (kind === "snow" ? 1.0 : 1);
           p.vr =
             p.kind === "sparkle" || p.kind === "heart"
