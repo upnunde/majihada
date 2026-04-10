@@ -104,6 +104,7 @@ export interface CardData {
     type: 'swipe' | 'list';
     images: string[];
     imageGap?: 'none' | 'small' | 'middle' | 'large';
+    useLoadMore?: boolean;
   };
   guestbook: {
     isOn: boolean;
@@ -251,7 +252,7 @@ export const useCardStore = create<CardStore>((set) => ({
         },
       ],
     },
-    gallery: { isOn: true, type: 'swipe', images: [], imageGap: 'middle' },
+    gallery: { isOn: true, type: 'swipe', images: [], imageGap: 'middle', useLoadMore: true },
     guestbook: {
       isOn: false,
       title: '축하해 주세요',

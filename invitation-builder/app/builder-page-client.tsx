@@ -3173,7 +3173,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
         const gridPreviewBorderClass = imageGap === 'none' ? 'border-0' : 'border-border';
         const requestedGridColumns = Number((data.gallery as any)?.gridColumns ?? 3);
         const gridColumns = requestedGridColumns === 2 ? 2 : 3;
-        const useLoadMore = !!((data.gallery as any)?.useLoadMore);
+        const useLoadMore = ((data.gallery as any)?.useLoadMore ?? true) === true;
         const enableDetailView = ((data.gallery as any)?.enableDetailView ?? true) === true;
         const effectiveDetailViewEnabled = layoutType === "slide" ? false : enableDetailView;
         const ratioClass = imageRatio === "square" ? "aspect-square" : "aspect-[3/4]";
@@ -5833,18 +5833,6 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
 
                           {(((data.gallery as any).layoutType ?? 'grid') === 'slide') && (
                             <>
-                              <FormItem label="전환시간">
-                                <div className="flex flex-wrap gap-2">
-                                  {([2, 3, 4, 5] as const).map((sec) => (
-                                    <OptionChip
-                                      key={sec}
-                                      label={`${sec}초`}
-                                      active={Number((data.gallery as any).autoSlideIntervalSec ?? 3) === sec}
-                                      onClick={() => updateData('gallery.autoSlideIntervalSec', sec)}
-                                    />
-                                  ))}
-                                </div>
-                              </FormItem>
                               <FormItem label="옵션">
                                 <div className="flex-1 flex flex-col gap-4">
                                   <span
@@ -5866,6 +5854,20 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                                   </span>
                                 </div>
                               </FormItem>
+                              {!!((data.gallery as any)?.autoSlide) && (
+                                <FormItem label="전환시간">
+                                  <div className="flex flex-wrap gap-2">
+                                    {([2, 3, 4, 5] as const).map((sec) => (
+                                      <OptionChip
+                                        key={sec}
+                                        label={`${sec}초`}
+                                        active={Number((data.gallery as any).autoSlideIntervalSec ?? 3) === sec}
+                                        onClick={() => updateData('gallery.autoSlideIntervalSec', sec)}
+                                      />
+                                    ))}
+                                  </div>
+                                </FormItem>
+                              )}
                             </>
                           )}
 
@@ -5906,15 +5908,15 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                                     role="button"
                                     tabIndex={0}
                                     className="inline-flex items-center gap-2 text-[13px] text-on-surface-20 select-none cursor-pointer"
-                                    onClick={() => updateData('gallery.useLoadMore', !((data.gallery as any)?.useLoadMore))}
+                                    onClick={() => updateData('gallery.useLoadMore', !(((data.gallery as any)?.useLoadMore ?? true)))}
                                     onKeyDown={(e) => {
                                       if (e.key === 'Enter' || e.key === ' ') {
-                                        updateData('gallery.useLoadMore', !((data.gallery as any)?.useLoadMore));
+                                        updateData('gallery.useLoadMore', !(((data.gallery as any)?.useLoadMore ?? true)));
                                       }
                                     }}
                                   >
                                     <CircleCheckbox
-                                      checked={!!(data.gallery as any)?.useLoadMore}
+                                      checked={((data.gallery as any)?.useLoadMore ?? true)}
                                       onChange={(e) => updateData('gallery.useLoadMore', e.target.checked)}
                                     />
                                     3줄 이상 더보기 사용
