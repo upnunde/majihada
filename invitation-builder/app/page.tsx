@@ -37,8 +37,9 @@ export default function HomePage() {
     <>
       <AppHeader />
       <main className="min-h-[calc(100vh-64px)] bg-white text-[#111]">
-        <section className="w-full bg-gradient-to-r from-[#f6f2ff] via-[#fcfbff] to-[#edf7ff]">
-          <div className="mx-auto w-full max-w-7xl px-6 py-24 md:py-32">
+        <section className="relative w-full bg-[url('/hero-bg-rings.png')] bg-cover bg-center bg-no-repeat">
+          <div className="absolute inset-0 bg-white/30" aria-hidden="true" />
+          <div className="relative z-10 mx-auto w-full max-w-7xl px-6 py-24 md:py-32">
             <p className="text-sm font-semibold text-[#6b7280]">dearhour · 모바일 초대장 서비스</p>
             <h1 className="mt-4 text-4xl font-extrabold tracking-tight md:text-6xl">
               소중한 날을 특별하게,
@@ -55,12 +56,6 @@ export default function HomePage() {
                 className="inline-flex h-11 items-center rounded-lg bg-[#111] px-5 text-sm font-semibold text-white hover:bg-black"
               >
                 지금 무료로 시작하기
-              </Link>
-              <Link
-                href="/mobile-invitation"
-                className="inline-flex h-11 items-center rounded-lg border border-[#d1d5db] bg-white px-5 text-sm font-semibold text-[#111] hover:bg-[#f9fafb]"
-              >
-                템플릿 둘러보기
               </Link>
             </div>
           </div>
