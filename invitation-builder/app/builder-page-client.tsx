@@ -1551,6 +1551,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   const [editorWidth, setEditorWidth] = useState(560);
   const [isTabletViewport, setIsTabletViewport] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<'editor' | 'preview'>('editor');
+  const [viewportHeightPx, setViewportHeightPx] = useState<number | null>(null);
   const isResizingEditorRef = useRef(false);
   const editorResizeStartRef = useRef<{ x: number; width: number } | null>(null);
   const editorResizePointerIdRef = useRef<number | null>(null);
@@ -1589,6 +1590,25 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   useEffect(() => {
     if (!isTabletViewport) setMobilePanel('editor');
   }, [isTabletViewport]);
+
+  useEffect(() => {
+    const updateViewportHeight = () => {
+      const visualHeight = window.visualViewport?.height;
+      const next = Math.round((visualHeight && visualHeight > 0 ? visualHeight : window.innerHeight));
+      setViewportHeightPx(next);
+    };
+
+    updateViewportHeight();
+    window.addEventListener('resize', updateViewportHeight);
+    window.addEventListener('orientationchange', updateViewportHeight);
+    window.visualViewport?.addEventListener('resize', updateViewportHeight);
+
+    return () => {
+      window.removeEventListener('resize', updateViewportHeight);
+      window.removeEventListener('orientationchange', updateViewportHeight);
+      window.visualViewport?.removeEventListener('resize', updateViewportHeight);
+    };
+  }, []);
 
   const [bankModalIndex, setBankModalIndex] = useState<number | null>(null);
   const [bankSearch, setBankSearch] = useState('');
@@ -4628,7 +4648,10 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   };
 
   return (
-    <div className="flex flex-col gap-0 h-screen w-full bg-gray-50 overflow-hidden">
+    <div
+      className="flex flex-col gap-0 w-full bg-gray-50 overflow-hidden"
+      style={{ height: viewportHeightPx ? `${viewportHeightPx}px` : '100dvh' }}
+    >
       <AppHeader
         hideSiteNav
         rightSlot={
@@ -6244,11 +6267,11 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
 
                           {greetingSampleOpen && createPortal(
                             <div
-                              className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
+                              className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-2 sm:p-4"
                               onClick={() => setGreetingSampleOpen(false)}
                             >
                               <div
-                                className="w-full max-w-md rounded-2xl bg-white border border-[color:var(--border-10)] p-6 flex flex-col gap-5 h-[min(800px,calc(100vh-48px))] overflow-hidden"
+                                className="w-full max-w-md rounded-2xl bg-white border border-[color:var(--border-10)] p-4 sm:p-6 flex flex-col gap-5 max-h-[calc(100dvh-16px)] overflow-hidden"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <div className="flex items-center justify-between">
@@ -6682,8 +6705,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
 
                           {/* 은행 선택 모달 (Portal로 body에 렌더링) */}
                           {bankModalIndex !== null && createPortal(
-                            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50" onClick={() => setBankModalIndex(null)}>
-                              <div className="w-full max-w-md rounded-2xl bg-white border border-[color:var(--border-10)] p-6 flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
+                            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-2 sm:p-4" onClick={() => setBankModalIndex(null)}>
+                              <div className="w-full max-w-md rounded-2xl bg-white border border-[color:var(--border-10)] p-4 sm:p-6 flex flex-col gap-5 max-h-[calc(100dvh-16px)] overflow-hidden" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center justify-between">
                                   <h3 className="text-[15px] font-semibold text-on-surface-10">은행선택</h3>
                                 </div>
@@ -7010,11 +7033,11 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
 
                           {noticeSampleOpen && createPortal(
                             <div
-                              className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
+                              className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-2 sm:p-4"
                               onClick={() => setNoticeSampleOpen(false)}
                             >
                               <div
-                                className="w-full max-w-md rounded-2xl bg-white border border-[color:var(--border-10)] p-6 flex flex-col gap-5 h-[min(800px,calc(100vh-48px))] overflow-hidden"
+                                className="w-full max-w-md rounded-2xl bg-white border border-[color:var(--border-10)] p-4 sm:p-6 flex flex-col gap-5 max-h-[calc(100dvh-16px)] overflow-hidden"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <div className="flex items-center justify-between">
@@ -7445,11 +7468,11 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                           </FormItem>
                           {rsvpSampleOpen && createPortal(
                             <div
-                              className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
+                              className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-2 sm:p-4"
                               onClick={() => setRsvpSampleOpen(false)}
                             >
                               <div
-                                className="w-full max-w-md rounded-2xl bg-white border border-[color:var(--border-10)] p-6 flex flex-col gap-5 h-[min(800px,calc(100vh-48px))] overflow-hidden"
+                                className="w-full max-w-md rounded-2xl bg-white border border-[color:var(--border-10)] p-4 sm:p-6 flex flex-col gap-5 max-h-[calc(100dvh-16px)] overflow-hidden"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <div className="flex items-center justify-between">
@@ -7660,11 +7683,11 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                           </div>
                           {guestUploadSampleOpen && createPortal(
                             <div
-                              className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
+                              className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-2 sm:p-4"
                               onClick={() => setGuestUploadSampleOpen(false)}
                             >
                               <div
-                                className="w-full max-w-md rounded-2xl bg-white border border-[color:var(--border-10)] p-6 flex flex-col gap-5 h-[min(800px,calc(100vh-48px))] overflow-hidden"
+                                className="w-full max-w-md rounded-2xl bg-white border border-[color:var(--border-10)] p-4 sm:p-6 flex flex-col gap-5 max-h-[calc(100dvh-16px)] overflow-hidden"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <div className="flex items-center justify-between">
@@ -8198,10 +8221,10 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
       </div>
 
       <Dialog open={imageEditorOpen} onOpenChange={(o) => !o && closeImageEditor()}>
-        <DialogContent className="bg-[color:var(--surface-10)] w-[420px] rounded-2xl shadow-[0px_8px_16px_8px_rgba(0,0,0,0.16)] outline outline-1 outline-offset-[-1px] outline-[color:var(--border-10)]/5 p-0 overflow-hidden border-0">
-          <div className="p-5 flex flex-col justify-start items-center gap-5">
+        <DialogContent className="bg-[color:var(--surface-10)] w-[min(420px,calc(100vw-16px))] max-h-[calc(100dvh-16px)] rounded-2xl shadow-[0px_8px_16px_8px_rgba(0,0,0,0.16)] outline outline-1 outline-offset-[-1px] outline-[color:var(--border-10)]/5 p-0 overflow-hidden border-0 flex flex-col">
+          <div className="p-4 sm:p-5 flex-1 min-h-0 overflow-y-auto flex flex-col justify-start items-center gap-5">
             {/* 프리뷰 */}
-            <div className="w-96 h-96 relative rounded-lg overflow-hidden bg-neutral-900">
+            <div className="w-full max-w-[24rem] aspect-square relative rounded-lg overflow-hidden bg-neutral-900">
               {/* 이미지(캔버스) — 정사각형 전체에 깔림 */}
               <canvas
                 ref={imageEditorCanvasRef}
@@ -8338,7 +8361,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           </div>
 
           {/* 푸터 */}
-          <div className="self-stretch w-full p-5 border-t border-[color:var(--border-10)]/5 inline-flex justify-end items-center gap-2 bg-[color:var(--surface-10)]">
+          <div className="self-stretch w-full p-4 sm:p-5 border-t border-[color:var(--border-10)]/5 inline-flex justify-end items-center gap-2 bg-[color:var(--surface-10)]">
             <Button
               type="button"
               variant="outline"
@@ -8361,11 +8384,11 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
       </Dialog>
 
       <Dialog open={sharePreviewOpen} onOpenChange={setSharePreviewOpen}>
-        <DialogContent className="w-[420px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border p-0 overflow-hidden">
+        <DialogContent className="w-[420px] max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-16px)] rounded-2xl border border-border p-0 overflow-hidden flex flex-col">
           <div className="p-5 border-b border-border">
             <DialogTitle className="text-[16px] font-semibold text-on-surface-10">공유 썸네일 미리보기</DialogTitle>
           </div>
-          <div className="p-5 bg-[color:var(--surface-10)]">
+          <div className="p-4 sm:p-5 bg-[color:var(--surface-10)] flex-1 min-h-0 overflow-y-auto">
             <div className="w-full rounded-xl border border-border bg-white overflow-hidden">
               {((data.share as any)?.useThumbnail ?? true) &&
                 (!!data.share?.thumbnail ? (
@@ -8403,7 +8426,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
       </Dialog>
 
       <Dialog open={shareThumbnailPickerOpen} onOpenChange={setShareThumbnailPickerOpen}>
-        <DialogContent className="w-[680px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border p-0 overflow-hidden">
+        <DialogContent className="w-[680px] max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-16px)] rounded-2xl border border-border p-0 overflow-hidden flex flex-col">
           <div className="p-5 border-b border-border bg-white">
             <DialogTitle className="text-[16px] font-semibold text-on-surface-10">
               기본 일러스트 썸네일 선택
@@ -8412,8 +8435,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
               원하는 썸네일을 클릭하면 공유 썸네일로 적용됩니다.
             </div>
           </div>
-          <div className="p-5 bg-[color:var(--surface-10)]">
-            <div className="grid grid-cols-4 gap-3">
+          <div className="p-4 sm:p-5 bg-[color:var(--surface-10)] flex-1 min-h-0 overflow-y-auto">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {shareThumbnailPresets.map((t) => {
                 const selected = data.share?.thumbnail === t.url;
                 return (
@@ -8452,7 +8475,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
       </Dialog>
 
       <Dialog open={greetingThumbnailPickerOpen} onOpenChange={setGreetingThumbnailPickerOpen}>
-        <DialogContent className="w-[424px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border p-0 overflow-hidden">
+        <DialogContent className="w-[424px] max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-16px)] rounded-2xl border border-border p-0 overflow-hidden flex flex-col">
           <div className="p-5 border-b border-border bg-white">
             <DialogTitle className="text-[16px] font-semibold text-on-surface-10">
               인사말 이미지 선택
@@ -8461,15 +8484,15 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
               원하는 이미지를 클릭하면 인사말 이미지로 적용됩니다.
             </div>
           </div>
-          <div className="p-5 w-[424px] h-[360px] max-h-[360px] overflow-y-auto bg-[color:var(--surface-10)]">
-            <div className="grid w-fit h-fit grid-cols-3 gap-3 justify-items-center">
+          <div className="p-4 sm:p-5 w-full flex-1 min-h-0 overflow-y-auto bg-[color:var(--surface-10)]">
+            <div className="grid w-full h-fit grid-cols-2 sm:grid-cols-3 gap-3 justify-items-center">
               {flowerThumbnailPresets.map((t) => {
                 const selected = (data.greeting as any)?.thumbnail === t.url;
                 return (
                   <button
                     key={t.id}
                     type="button"
-                    className={`w-[120px] h-[120px] rounded-lg overflow-hidden border bg-white flex items-center justify-center ${
+                    className={`w-full max-w-[120px] aspect-square rounded-lg overflow-hidden border bg-white flex items-center justify-center ${
                       selected ? 'border-[color:var(--key)]' : 'border-border'
                     } hover:border-[color:var(--key)]/50`}
                     onClick={() => {
@@ -8487,7 +8510,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
               })}
             </div>
           </div>
-          <div className="p-4 w-[424px] border-t border-border bg-white flex justify-end">
+          <div className="p-4 w-full border-t border-border bg-white flex justify-end">
             <Button
               type="button"
               variant="outline"
@@ -8501,7 +8524,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
       </Dialog>
 
       <Dialog open={mainPresetPickerOpen} onOpenChange={setMainPresetPickerOpen}>
-        <DialogContent className="w-[424px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border p-0 overflow-hidden">
+        <DialogContent className="w-[424px] max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-16px)] rounded-2xl border border-border p-0 overflow-hidden flex flex-col">
           <div className="p-5 border-b border-border bg-white">
             <DialogTitle className="text-[16px] font-semibold text-on-surface-10">
               메인 기본 이미지 선택
@@ -8510,7 +8533,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
               원하는 이미지를 클릭하면 메인 영역 기본 이미지로 적용됩니다.
             </div>
           </div>
-          <div className="p-5 w-[424px] max-h-[360px] overflow-y-auto bg-[color:var(--surface-10)]">
+          <div className="p-4 sm:p-5 w-full flex-1 min-h-0 overflow-y-auto bg-[color:var(--surface-10)]">
             <div className="grid w-full grid-cols-2 gap-4 justify-items-center">
               {MAIN_IMAGE_PRESETS.map((t) => {
                 const current = String((data.main as any)?.presetImage ?? '').trim() || DEFAULT_MAIN_PRESET_URL;
@@ -8541,7 +8564,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
               })}
             </div>
           </div>
-          <div className="p-4 w-[424px] border-t border-border bg-white flex justify-end">
+          <div className="p-4 w-full border-t border-border bg-white flex justify-end">
             <Button
               type="button"
               variant="outline"
@@ -8555,11 +8578,11 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
       </Dialog>
 
       <Dialog open={rsvpPreviewModalOpen} onOpenChange={setRsvpPreviewModalOpen}>
-        <DialogContent className="w-[420px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border p-0 overflow-hidden">
+        <DialogContent className="w-[420px] max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-16px)] rounded-2xl border border-border p-0 overflow-hidden flex flex-col">
           <div className="p-5 border-b border-border bg-white">
             <DialogTitle className="text-[16px] font-semibold text-on-surface-10">참석의사 전달</DialogTitle>
           </div>
-          <div className="p-5 bg-[color:var(--surface-10)] space-y-4">
+          <div className="p-4 sm:p-5 bg-[color:var(--surface-10)] space-y-4 flex-1 min-h-0 overflow-y-auto">
             <div className="space-y-2">
               <p className="text-[12px] font-medium text-on-surface-20">구분</p>
               <div className="grid grid-cols-2 gap-2">
