@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Palette, Music, Image as ImageIcon, Users, MessageSquare, MessageCircle, Phone, CalendarHeart, MapPin, Bell, Images, Wallet, BookOpen, Youtube, Share2, Shield, CheckCircle2, GripVertical, Play, Pause, VolumeX, Volume2, X, ChevronDown, ChevronLeft, ChevronRight, MoreVertical, Pencil, Trash2, RotateCw, RefreshCcw, Move, ArrowUpDown, ClipboardCheck, Calendar, Settings, Bus, Train, Car, ParkingCircle, Route, AlertCircle } from 'lucide-react';
@@ -1605,8 +1605,11 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
 
   useEffect(() => {
     const updateViewportHeight = () => {
-      const visualHeight = window.visualViewport?.height;
-      const next = Math.round((visualHeight && visualHeight > 0 ? visualHeight : window.innerHeight));
+      const vv = window.visualViewport;
+      const visualHeight = vv?.height;
+      const visualOffsetTop = vv?.offsetTop ?? 0;
+      const rawHeight = (visualHeight && visualHeight > 0 ? visualHeight : window.innerHeight) + visualOffsetTop;
+      const next = Math.round(Math.max(0, Math.min(rawHeight, window.innerHeight)));
       setViewportHeightPx(next);
     };
 
@@ -1614,11 +1617,13 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
     window.addEventListener('resize', updateViewportHeight);
     window.addEventListener('orientationchange', updateViewportHeight);
     window.visualViewport?.addEventListener('resize', updateViewportHeight);
+    window.visualViewport?.addEventListener('scroll', updateViewportHeight);
 
     return () => {
       window.removeEventListener('resize', updateViewportHeight);
       window.removeEventListener('orientationchange', updateViewportHeight);
       window.visualViewport?.removeEventListener('resize', updateViewportHeight);
+      window.visualViewport?.removeEventListener('scroll', updateViewportHeight);
     };
   }, []);
 
@@ -2185,8 +2190,10 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   const [imageEditorRotation, setImageEditorRotation] = useState(0);
   const [imageEditorFlipX, setImageEditorFlipX] = useState(false);
   const [imageEditorPan, setImageEditorPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [imageEditorAspect, setImageEditorAspect] = useState<'square' | 'portrait'>('portrait');
-  const [imageEditorTarget, setImageEditorTarget] = useState<{ kind: 'single' } | { kind: 'multi'; index: number } | { kind: 'gallery'; index: number } | null>(null);
+  const [imageEditorAspect, setImageEditorAspect] = useState<'square' | 'portrait' | 'landscape10x4'>('portrait');
+  const [imageEditorTarget, setImageEditorTarget] = useState<
+    { kind: 'single' } | { kind: 'multi'; index: number } | { kind: 'gallery'; index: number } | { kind: 'shareThumbnail' } | null
+  >(null);
   const imageEditorCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const imageEditorImageRef = useRef<HTMLImageElement | null>(null);
   const imageEditorZoomRef = useRef(1);
@@ -3079,7 +3086,10 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
     });
   };
 
-  const openImageEditor = (target: { kind: 'single' } | { kind: 'multi'; index: number } | { kind: 'gallery'; index: number }, src: string) => {
+  const openImageEditor = (
+    target: { kind: 'single' } | { kind: 'multi'; index: number } | { kind: 'gallery'; index: number } | { kind: 'shareThumbnail' },
+    src: string,
+  ) => {
     if (!src) return;
     setImageEditorTarget(target);
     setImageEditorSrc(src);
@@ -3090,6 +3100,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
     if (target.kind === 'gallery') {
       const ratio = ((data.gallery as any)?.imageRatio ?? 'portrait') as string;
       setImageEditorAspect(ratio === 'square' ? 'square' : 'portrait');
+    } else if (target.kind === 'shareThumbnail') {
+      setImageEditorAspect('landscape10x4');
     } else {
       setImageEditorAspect('portrait');
     }
@@ -3108,7 +3120,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
     if (!canvas || !imageEditorTarget) return;
 
     const cropH = canvas.height;
-    const cropRatio = imageEditorAspect === 'square' ? 1 : (3 / 4);
+    const cropRatio = imageEditorAspect === 'square' ? 1 : imageEditorAspect === 'landscape10x4' ? (10 / 4) : (3 / 4);
     const cropW = Math.round(cropH * cropRatio);
     const offsetX = Math.round((canvas.width - cropW) / 2);
 
@@ -3138,7 +3150,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
       }
       prev[imageEditorTarget.index] = url;
       updateData('main.images', prev);
-    } else {
+    } else if (imageEditorTarget.kind === 'gallery') {
       const prev = Array.isArray((data.gallery as any).images) ? [...(data.gallery as any).images] : [];
       const prevUrl = prev[imageEditorTarget.index];
       if (typeof prevUrl === 'string' && prevUrl.startsWith('blob:')) {
@@ -3146,6 +3158,12 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
       }
       prev[imageEditorTarget.index] = url;
       updateData('gallery.images', prev);
+    } else {
+      const prevUrl = String((data.share as any)?.thumbnail ?? '');
+      if (prevUrl.startsWith('blob:')) {
+        try { URL.revokeObjectURL(prevUrl); } catch {}
+      }
+      updateData('share.thumbnail', url);
     }
 
     closeImageEditor();
@@ -3325,8 +3343,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
             <div className="space-y-5">
               {greetingEntries.map((entry, idx) => (
                 <div key={`greeting-entry-${idx}`}>
-                  <h3 className="text-[1em] font-semibold text-on-surface-10 mb-6">{entry.title}</h3>
-                  <p className="text-[14px] leading-[26px] text-on-surface-20 whitespace-pre-wrap">
+                  <h3 className="text-[18px] font-semibold text-on-surface-10 mb-6">{entry.title}</h3>
+                  <p className="text-[16px] font-[400] leading-[26px] text-on-surface-20 whitespace-pre-wrap">
                     {entry.content}
                   </p>
                 </div>
@@ -3499,7 +3517,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
         return (
           <div className="mx-auto w-full px-5 space-y-5">
             {contactEnabled && useContactThumbnail && !!(data.share?.thumbnail ?? '').trim() && (
-              <div className="w-full aspect-video bg-[color:var(--surface-20)] overflow-hidden mb-[40px]">
+              <div className="w-full aspect-[10/4] bg-[color:var(--surface-20)] overflow-hidden mb-[40px]">
                 <img
                   src={(data.share?.thumbnail ?? '').trim()}
                   alt="혼주 섹션 이미지"
@@ -3508,7 +3526,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
               </div>
             )}
             {hasParentsText ? (
-              <div className="preview-hosts-parents-line space-y-1 text-[93.75%] text-on-surface-20 tracking-tight text-center">
+              <div className="preview-hosts-parents-line space-y-1 text-[18px] text-on-surface-20 tracking-tight text-center">
                 {orderedCoupleRows.map((row) => (
                   <div key={row.role} className="min-h-[27px] flex items-center justify-center" style={{ gap: '8px' }}>
                     {row.parentsText ? (
@@ -3777,7 +3795,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
 
               <>
                 <div className="mx-auto mt-[10px] mb-[10px] h-10 w-px bg-border" aria-hidden="true" />
-                <p className="text-[14px] font-normal text-on-surface-10 mb-1">{venueDisplay}</p>
+                <p className="text-[16px] font-normal text-on-surface-10 mb-1">{venueDisplay}</p>
                 {simplifiedAddress && simplifiedAddress !== venueDisplay && (
                   <p className="text-[14px] font-normal text-on-surface-30 mb-6">{simplifiedAddress}</p>
                 )}
@@ -3872,7 +3890,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                     {transportsClean.map((t, idx) => (
                       <div key={`${t.mode}-${idx}`} className="w-full mt-4 mb-4 text-[0.8125em] text-on-surface-20 text-left">
                         {t.mode && (
-                          <div className="mb-1 text-[14px] font-semibold text-on-surface-10 text-left flex items-center justify-start gap-1.5 leading-none">
+                          <div className="mb-1 text-[15px] font-semibold text-on-surface-10 text-left flex items-center justify-start gap-1.5 leading-none">
                             <span aria-hidden className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[color:var(--key)] leading-none">
                               {getTransportModeIcon(t.mode)}
                             </span>
@@ -3880,7 +3898,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                           </div>
                         )}
                         {t.detail && (
-                          <div className="text-[14px] leading-[24px] text-on-surface-30 whitespace-pre-line text-left">{t.detail}</div>
+                          <div className="text-[15px] leading-[24px] text-on-surface-30 whitespace-pre-line text-left">{t.detail}</div>
                         )}
                       </div>
                     ))}
@@ -3936,7 +3954,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
               })}
             </div>
             <div className="px-5 py-0">
-              <p className="whitespace-pre-line leading-[26px] text-[14px] text-center">{content}</p>
+              <p className="whitespace-pre-line leading-[26px] text-[16px] font-[400] text-center">{content}</p>
             </div>
           </div>
         );
@@ -4674,6 +4692,19 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
     }
   };
 
+  const focusSelectableTarget = useCallback((event: React.SyntheticEvent<HTMLElement>) => {
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+
+    const selectable = target.closest<HTMLElement>('button,[role="button"],a,[tabindex]');
+    if (!selectable) return;
+    if (selectable.hasAttribute("disabled") || selectable.getAttribute("aria-disabled") === "true") return;
+
+    requestAnimationFrame(() => {
+      selectable.focus({ preventScroll: true });
+    });
+  }, []);
+
   return (
     <div
       className="flex flex-col gap-0 w-full bg-gray-50 overflow-hidden"
@@ -4704,17 +4735,51 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
             <button
               type="button"
               className="bg-[color:var(--key)] text-white text-sm font-bold px-5 py-2 rounded-lg hover:bg-[color:var(--key-dark)] transition-colors shadow-none"
-              onClick={() => {
+              onClick={async () => {
                 updateData("billing.savedAt", new Date().toISOString());
+                let savedDraftMeta: { id: string; title: string; deleteAt: string; status: string } | null = null;
+                const draftTitle = String(data.main?.title || "새 청첩장").trim() || "새 청첩장";
+
+                try {
+                  const res = await fetch("/api/invitations/draft", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      title: draftTitle,
+                      payload: data,
+                    }),
+                  });
+                  if (res.status === 401) {
+                    router.push(`/login?next=${encodeURIComponent("/editor")}`);
+                    return;
+                  }
+                  if (!res.ok) {
+                    window.alert("저장을 위해 로그인이 필요하거나 서버 설정이 아직 완료되지 않았습니다.");
+                    return;
+                  }
+                  if (res.ok) {
+                    const json = (await res.json()) as { id: string; expiresAt?: string | null };
+                    savedDraftMeta = {
+                      id: json.id,
+                      title: draftTitle,
+                      deleteAt: json.expiresAt ? String(json.expiresAt).slice(0, 10) : "미정",
+                      status: "결제 전",
+                    };
+                  }
+                } catch {
+                  window.alert("저장 중 네트워크 오류가 발생했습니다. 다시 시도해 주세요.");
+                  return;
+                }
+
                 try {
                   window.localStorage.setItem('mcard:hasDraft', '1');
                   window.localStorage.setItem(
                     'mcard:lastDraft',
                     JSON.stringify({
-                      id: `draft-${Date.now()}`,
-                      title: String(data.main?.title || "새 청첩장").trim() || "새 청첩장",
-                      deleteAt: "저장 직후",
-                      status: "결제 전",
+                      id: savedDraftMeta?.id ?? `draft-${Date.now()}`,
+                      title: savedDraftMeta?.title ?? draftTitle,
+                      deleteAt: savedDraftMeta?.deleteAt ?? "저장 직후",
+                      status: savedDraftMeta?.status ?? "결제 전",
                     }),
                   );
                 } catch (_e) {
@@ -4864,6 +4929,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
             isTabletViewport ? "flex-1 border-r-0" : "flex-shrink-0 border-r border-border",
           )}
           style={isTabletViewport ? undefined : { width: editorWidth }}
+          onPointerUpCapture={focusSelectableTarget}
+          onClickCapture={focusSelectableTarget}
         >
           <div ref={editorScrollRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scroll-smooth no-scrollbar">
             <div className="px-4 pt-4 pb-2 bg-[color:var(--surface-20)]">
@@ -5800,8 +5867,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                             <FormItem label="썸네일">
                               <div className="flex min-w-0 flex-1 flex-col gap-2">
                                 <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:gap-3">
-                                  <div className="flex w-full min-w-0 justify-center sm:flex-1 sm:justify-start">
-                                    <div className="aspect-video w-full max-w-[200px] rounded-lg border border-border bg-[color:var(--surface-20)] overflow-hidden">
+                                  <div className="flex w-full min-w-0 justify-start sm:flex-1 sm:justify-start">
+                                    <div className="aspect-[10/4] w-full max-w-[200px] rounded-lg border border-border bg-[color:var(--surface-20)] overflow-hidden">
                                       {data.share?.thumbnail ? (
                                         <img
                                           src={data.share.thumbnail}
@@ -5815,7 +5882,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                                       )}
                                     </div>
                                   </div>
-                                  <div className="flex min-w-0 w-full flex-col gap-2 sm:flex-1 sm:max-w-[min(100%,200px)]">
+                                  <div className="flex min-w-0 w-full flex-row flex-wrap gap-2 sm:flex-1 sm:max-w-[min(100%,200px)] sm:flex-col sm:flex-nowrap">
                                     <label className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-10 inline-flex items-center cursor-pointer hover:bg-slate-50 w-fit max-w-full whitespace-nowrap leading-none flex-shrink-0">
                                       사진 업로드
                                       <input
@@ -5839,13 +5906,22 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                                       이미지 고르기
                                     </button>
                                     {data.share?.thumbnail && (
-                                      <button
-                                        type="button"
-                                        className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-10 inline-flex items-center cursor-pointer hover:bg-slate-50 w-fit max-w-full whitespace-nowrap leading-none flex-shrink-0"
-                                        onClick={() => updateData('share.thumbnail', '')}
-                                      >
-                                        삭제
-                                      </button>
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          type="button"
+                                          className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-10 inline-flex items-center cursor-pointer hover:bg-slate-50 w-fit max-w-full whitespace-nowrap leading-none flex-shrink-0"
+                                          onClick={() => openImageEditor({ kind: 'shareThumbnail' }, data.share.thumbnail)}
+                                        >
+                                          수정
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-10 inline-flex items-center cursor-pointer hover:bg-slate-50 w-fit max-w-full whitespace-nowrap leading-none flex-shrink-0"
+                                          onClick={() => updateData('share.thumbnail', '')}
+                                        >
+                                          삭제
+                                        </button>
+                                      </div>
                                     )}
                                   </div>
                                 </div>
@@ -8285,7 +8361,12 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
         <DialogContent className="bg-[color:var(--surface-10)] w-[min(420px,calc(100vw-16px))] max-h-[calc(100dvh-16px)] rounded-2xl shadow-[0px_8px_16px_8px_rgba(0,0,0,0.16)] outline outline-1 outline-offset-[-1px] outline-[color:var(--border-10)]/5 p-0 overflow-hidden border-0 flex flex-col">
           <div className="p-4 sm:p-5 flex-1 min-h-0 overflow-y-auto flex flex-col justify-start items-center gap-5">
             {/* 프리뷰 */}
-            <div className="w-full max-w-[24rem] aspect-square relative rounded-lg overflow-hidden bg-neutral-900">
+            <div
+              className={cn(
+                "w-full max-w-[24rem] relative rounded-lg overflow-hidden bg-neutral-900",
+                imageEditorAspect === 'landscape10x4' ? 'aspect-[10/4]' : 'aspect-square',
+              )}
+            >
               {/* 이미지(캔버스) — 정사각형 전체에 깔림 */}
               <canvas
                 ref={imageEditorCanvasRef}
@@ -8339,6 +8420,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
               />
 
               {imageEditorAspect === 'square' ? (
+                <div className="absolute inset-0 pointer-events-none outline outline-2 outline-offset-[-2px] outline-[color:var(--key)] rounded-lg" />
+              ) : imageEditorAspect === 'landscape10x4' ? (
                 <div className="absolute inset-0 pointer-events-none outline outline-2 outline-offset-[-2px] outline-[color:var(--key)] rounded-lg" />
               ) : (
                 <>
