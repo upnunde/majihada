@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { syncUserProfile } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -31,6 +32,7 @@ export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as { title?: string; payload?: unknown } | null;
   const title = String(body?.title ?? "").trim() || "새 청첩장";
   const payload = body?.payload ?? null;
+  const contentInput = payload === null ? undefined : (payload as Prisma.InputJsonValue);
 
   const synced = await syncUserProfile(user);
 
@@ -43,7 +45,7 @@ export async function POST(request: NextRequest) {
           title,
           code: makeInvitationCode(),
           status: "DRAFT",
-          content: payload as object | null,
+          content: contentInput,
           expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 90),
         },
       });

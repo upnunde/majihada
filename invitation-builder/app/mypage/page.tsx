@@ -6,6 +6,7 @@ import MyPageClient, {
   type MyPaymentItem,
 } from "@/app/mypage/mypage-client";
 import { readdir, stat } from "fs/promises";
+import type { Dirent } from "fs";
 import path from "path";
 
 const MEDIA_EXTENSIONS = new Set([
@@ -27,7 +28,7 @@ async function collectGuestMedia(invitationIds: string[]): Promise<GuestMediaIte
 
   for (const invitationId of invitationIds) {
     const invitationDir = path.join(baseDir, invitationId);
-    let folders: Awaited<ReturnType<typeof readdir>> = [];
+    let folders: Dirent[] = [];
     try {
       folders = await readdir(invitationDir, { withFileTypes: true });
     } catch {
@@ -37,7 +38,7 @@ async function collectGuestMedia(invitationIds: string[]): Promise<GuestMediaIte
     for (const folder of folders) {
       if (!folder.isDirectory()) continue;
       const folderPath = path.join(invitationDir, folder.name);
-      let files: Awaited<ReturnType<typeof readdir>> = [];
+      let files: Dirent[] = [];
       try {
         files = await readdir(folderPath, { withFileTypes: true });
       } catch {
