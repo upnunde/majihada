@@ -3,6 +3,9 @@
 본 문서는 모청 서비스의 백엔드 MVP 구현 기준을 정의한다.  
 목표는 **인증 → 저장 → 발행 → 접근제어 → 결제 확장 준비**까지 끊김 없이 연결하는 것이다.
 
+> 본 문서는 **목표 모델/목표 API 스펙**을 기준으로 작성되어 있다.
+> 현재 실제 구현 상태와 운영 정책은 상위 문서 `docs/PRODUCT_STANDARD.md`를 따른다.
+
 ## 1) MVP 목표
 
 - 간편로그인 사용자 인증
@@ -179,5 +182,5 @@
 
 ---
 
-최종 업데이트: 2026-04-07  
-연계 문서: `docs/SERVICE_POLICY.md`
+최종 업데이트: 2026-04-17  
+연계 문서: `docs/PRODUCT_STANDARD.md`, `docs/SERVICE_POLICY.md`, `docs/INFRA_STRATEGY.md`

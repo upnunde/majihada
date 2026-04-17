@@ -1553,6 +1553,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   const [isTabletViewport, setIsTabletViewport] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<'editor' | 'preview'>('editor');
   const [viewportHeightPx, setViewportHeightPx] = useState<number | null>(null);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const isResizingEditorRef = useRef(false);
   const editorResizeStartRef = useRef<{ x: number; width: number } | null>(null);
   const editorResizePointerIdRef = useRef<number | null>(null);
@@ -3515,9 +3516,9 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
         }
 
         return (
-          <div className="mx-auto w-full px-5 space-y-5">
+          <div className="mx-auto w-full px-10 space-y-5">
             {contactEnabled && useContactThumbnail && !!(data.share?.thumbnail ?? '').trim() && (
-              <div className="w-full aspect-[10/4] bg-[color:var(--surface-20)] overflow-hidden mb-[40px]">
+              <div className="w-full aspect-[10/4] bg-[color:var(--surface-20)] overflow-hidden mb-[40px] rounded-[8px]">
                 <img
                   src={(data.share?.thumbnail ?? '').trim()}
                   alt="혼주 섹션 이미지"
@@ -4734,8 +4735,13 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
             )}
             <button
               type="button"
-              className="bg-[color:var(--key)] text-white text-sm font-bold px-5 py-2 rounded-lg hover:bg-[color:var(--key-dark)] transition-colors shadow-none"
+              disabled={isSavingDraft}
+              className="bg-[color:var(--key)] text-white text-sm font-bold px-5 py-2 rounded-lg hover:bg-[color:var(--key-dark)] transition-colors shadow-none disabled:opacity-60 disabled:cursor-not-allowed"
               onClick={async () => {
+                if (isSavingDraft) return;
+                setIsSavingDraft(true);
+                const nextPath =
+                  typeof window !== "undefined" ? `${window.location.pathname}${window.location.search}` : "/editor";
                 updateData("billing.savedAt", new Date().toISOString());
                 let savedDraftMeta: { id: string; title: string; deleteAt: string; status: string } | null = null;
                 const draftTitle = String(data.main?.title || "새 청첩장").trim() || "새 청첩장";
@@ -4749,12 +4755,12 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                       payload: data,
                     }),
                   });
-                  if (res.status === 401) {
-                    router.push(`/login?next=${encodeURIComponent("/editor")}`);
+                  if (res.status === 401 || res.status === 503) {
+                    window.location.assign(`/login?next=${encodeURIComponent(nextPath)}`);
                     return;
                   }
                   if (!res.ok) {
-                    window.alert("저장을 위해 로그인이 필요하거나 서버 설정이 아직 완료되지 않았습니다.");
+                    window.alert("저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
                     return;
                   }
                   if (res.ok) {
@@ -4769,6 +4775,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                 } catch {
                   window.alert("저장 중 네트워크 오류가 발생했습니다. 다시 시도해 주세요.");
                   return;
+                } finally {
+                  setIsSavingDraft(false);
                 }
 
                 try {
@@ -4788,7 +4796,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                 router.push('/mypage?saved=1');
               }}
             >
-              저장하기
+              {isSavingDraft ? '저장중...' : '저장하기'}
             </button>
           </div>
         }

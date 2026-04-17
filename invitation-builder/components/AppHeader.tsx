@@ -197,6 +197,10 @@ export default function AppHeader({ rightSlot, hideSiteNav = false }: AppHeaderP
   const handleSignOut = useCallback(async () => {
     if (!hasSupabaseEnv()) return;
     const supabase = createSupabaseBrowserClient();
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    }).catch(() => null);
     await supabase.auth.signOut();
     setAuthState("signed_out");
     router.refresh();

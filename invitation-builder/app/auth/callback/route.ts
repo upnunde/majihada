@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { syncUserProfile } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
@@ -29,7 +30,20 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (user) {
-    await syncUserProfile(user);
+    const synced = await syncUserProfile(user);
+    await prisma.auditLog
+      .create({
+        data: {
+          userId: synced.id,
+          action: "auth.login",
+          targetType: "User",
+          targetId: synced.id,
+          ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+          userAgent: request.headers.get("user-agent"),
+          payload: { provider: user.app_metadata?.provider ?? null },
+        },
+      })
+      .catch(() => null);
   }
 
   return NextResponse.redirect(new URL(next, request.url));

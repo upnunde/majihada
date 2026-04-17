@@ -32,21 +32,22 @@ enum PaymentStatus {
 }
 
 model User {
-  id          String       @id @db.Uuid
-  email       String       @unique
-  name        String?
-  avatarUrl   String?
-  role        UserRole     @default(USER)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  invitations Invitation[]
-  payments    Payment[]
-  auditLogs   AuditLog[]
+  id             String       @id @default(cuid())
+  authProviderId String?      @unique @db.Uuid
+  email          String       @unique
+  name           String?
+  avatarUrl      String?
+  role           UserRole     @default(USER)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  invitations    Invitation[]
+  payments       Payment[]
+  auditLogs      AuditLog[]
 }
 
 model Invitation {
   id         String           @id @default(cuid())
-  userId     String           @db.Uuid
+  userId     String
   title      String
   code       String           @unique
   status     InvitationStatus @default(DRAFT)
@@ -62,7 +63,7 @@ model Invitation {
 
 model Payment {
   id           String          @id @default(cuid())
-  userId       String          @db.Uuid
+  userId       String
   invitationId String?
   orderId      String          @unique
   provider     PaymentProvider @default(TOSS)
@@ -81,7 +82,7 @@ model Payment {
 
 model AuditLog {
   id         String   @id @default(cuid())
-  userId     String?  @db.Uuid
+  userId     String?
   action     String
   targetType String?
   targetId   String?
