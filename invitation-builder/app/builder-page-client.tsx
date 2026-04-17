@@ -390,12 +390,12 @@ function IntroLayoutSwatch({ variant }: { variant: IntroLayoutValue }) {
       className="flex h-[100px] w-[64px] shrink-0 flex-col items-stretch overflow-hidden rounded-md border border-border bg-white"
       aria-hidden
     >
-      {/* Type A — Gallery Grid: 정사각 사진 2개 나란히 */}
+      {/* Type A — Gallery Grid: 3:4 세로 사진 2개 나란히 */}
       {variant === 'A' && (
         <span className="flex h-full w-full flex-row gap-[3px] px-[4px] py-[5px]">
           {[0, 1].map((i) => (
             <span key={i} className="flex flex-1 flex-col gap-[2px]">
-              <span className={cn('aspect-square w-full', photo)} />
+              <span className={cn('aspect-[3/4] w-full', photo)} />
               <span className={cn('mt-[2px] h-[1px] w-[10px] rounded-[1px]', line)} style={faintest} />
               <span className={cn('h-[2px] w-[18px] rounded-[1px]', lineDark)} />
               <span className={cn('h-[1px] w-[16px] rounded-[1px]', line)} style={faint} />
@@ -1269,10 +1269,12 @@ function IntroEditor({
   data,
   updateData,
   isEnabled,
+  onEditImage,
 }: {
   data: CardData;
   updateData: (path: string, value: any) => void;
   isEnabled: boolean;
+  onEditImage: (role: 'groom' | 'bride', src: string) => void;
 }) {
   const intro = (data as any).intro ?? {};
   const sectionHeading = String(intro.sectionHeading ?? '');
@@ -1312,8 +1314,8 @@ function IntroEditor({
     return (
       <div className="flex flex-col gap-5">
         <FormItem label={`${label} 사진`}>
-          <div className="flex items-center gap-3">
-            <div className="w-[84px] h-[112px] rounded-lg border border-border bg-[color:var(--surface-20)] overflow-hidden flex items-center justify-center flex-shrink-0">
+          <div className="w-full min-h-[120px] flex items-start gap-3">
+            <div className="w-[120px] aspect-[3/4] rounded-lg border border-border bg-[color:var(--surface-20)] overflow-hidden flex items-center justify-center flex-shrink-0">
               {hasImage ? (
                 <img
                   src={profile.image}
@@ -1321,10 +1323,10 @@ function IntroEditor({
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <UserRound className="w-8 h-8 text-[color:var(--on-surface-disabled)]" strokeWidth={1.25} aria-hidden />
+                <ImageIcon className="w-8 h-8 text-[color:var(--on-surface-disabled)]" strokeWidth={1.25} aria-hidden />
               )}
             </div>
-            <div className="flex flex-col gap-2">
+            <div className="h-full flex flex-col justify-start gap-2 min-w-0">
               <button
                 type="button"
                 className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-20 hover:bg-slate-50 whitespace-nowrap leading-none w-fit"
@@ -1335,25 +1337,34 @@ function IntroEditor({
               {hasImage && (
                 <button
                   type="button"
+                  className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-20 hover:bg-slate-50 whitespace-nowrap leading-none w-fit"
+                  onClick={() => onEditImage(role, String(profile.image ?? ''))}
+                >
+                  이미지 편집
+                </button>
+              )}
+              {hasImage && (
+                <button
+                  type="button"
                   className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-30 hover:bg-slate-50 whitespace-nowrap leading-none w-fit"
                   onClick={() => updateData(`intro.${role}.image`, '')}
                 >
                   사진 제거
                 </button>
               )}
-              <input
-                ref={inputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  handleImage(role, file);
-                  e.currentTarget.value = '';
-                }}
-              />
             </div>
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                handleImage(role, file);
+                e.currentTarget.value = '';
+              }}
+            />
           </div>
         </FormItem>
         <FormItem label="생년월일">
@@ -2665,7 +2676,13 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   const [imageEditorPan, setImageEditorPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [imageEditorAspect, setImageEditorAspect] = useState<'square' | 'portrait' | 'landscape10x4'>('portrait');
   const [imageEditorTarget, setImageEditorTarget] = useState<
-    { kind: 'single' } | { kind: 'multi'; index: number } | { kind: 'gallery'; index: number } | { kind: 'shareThumbnail' } | null
+    | { kind: 'single' }
+    | { kind: 'multi'; index: number }
+    | { kind: 'gallery'; index: number }
+    | { kind: 'shareThumbnail' }
+    | { kind: 'mainPreset' }
+    | { kind: 'intro'; role: 'groom' | 'bride' }
+    | null
   >(null);
   const imageEditorCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const imageEditorImageRef = useRef<HTMLImageElement | null>(null);
@@ -3571,7 +3588,13 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
   };
 
   const openImageEditor = (
-    target: { kind: 'single' } | { kind: 'multi'; index: number } | { kind: 'gallery'; index: number } | { kind: 'shareThumbnail' },
+    target:
+      | { kind: 'single' }
+      | { kind: 'multi'; index: number }
+      | { kind: 'gallery'; index: number }
+      | { kind: 'shareThumbnail' }
+      | { kind: 'mainPreset' }
+      | { kind: 'intro'; role: 'groom' | 'bride' },
     src: string,
   ) => {
     if (!src) return;
@@ -3642,12 +3665,24 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
       }
       prev[imageEditorTarget.index] = url;
       updateData('gallery.images', prev);
-    } else {
+    } else if (imageEditorTarget.kind === 'shareThumbnail') {
       const prevUrl = String((data.share as any)?.thumbnail ?? '');
       if (prevUrl.startsWith('blob:')) {
         try { URL.revokeObjectURL(prevUrl); } catch {}
       }
       updateData('share.thumbnail', url);
+    } else if (imageEditorTarget.kind === 'mainPreset') {
+      const prevUrl = String((data.main as any)?.presetImage ?? '');
+      if (prevUrl.startsWith('blob:')) {
+        try { URL.revokeObjectURL(prevUrl); } catch {}
+      }
+      updateData('main.presetImage', url);
+    } else if (imageEditorTarget.kind === 'intro') {
+      const prevIntroUrl = String(((data as any).intro?.[imageEditorTarget.role]?.image ?? ''));
+      if (prevIntroUrl.startsWith('blob:')) {
+        try { URL.revokeObjectURL(prevIntroUrl); } catch {}
+      }
+      updateData(`intro.${imageEditorTarget.role}.image`, url);
     }
 
     closeImageEditor();
@@ -3882,7 +3917,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           );
         };
 
-        /** Layout A — Gallery Grid (참고 이미지1 스타일 · 정사각 사진 2열 나란히) */
+        /** Layout A — Gallery Grid (참고 이미지1 스타일 · 3:4 세로 사진 2열 나란히) */
         const renderCardA = (
           _role: '신랑' | '신부',
           _index: number,
@@ -3896,7 +3931,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           const traits = String(p.traits ?? '').trim();
           return (
             <article className="w-full flex flex-col text-left">
-              {renderPhoto(p.image, _role, 'w-full aspect-square')}
+              {renderPhoto(p.image, _role, 'w-full aspect-[3/4]')}
               <div className="mt-4 text-[10px] tracking-[0.28em] uppercase text-on-surface-30 font-medium">
                 {roleLabelEn}
               </div>
@@ -3978,7 +4013,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           return (
             <article className="w-full flex flex-col items-center text-center">
               <div className="w-[58%]">
-                {renderPhoto(p.image, _role, 'w-full aspect-[4/5]')}
+                {renderPhoto(p.image, _role, 'w-full aspect-[3/4]')}
               </div>
               <div className="mt-5 text-[10px] tracking-[0.32em] uppercase text-on-surface-30 font-medium">
                 {roleLabelEn}
@@ -4015,7 +4050,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
           const traits = String(p.traits ?? '').trim();
           return (
             <article className="w-full flex flex-col">
-              {renderPhoto(p.image, _role, 'w-full aspect-[4/5]')}
+              {renderPhoto(p.image, _role, 'w-full aspect-[3/4]')}
               <div className="mt-4 flex items-end justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="text-[10px] tracking-[0.28em] uppercase text-on-surface-30 font-medium">
@@ -6022,82 +6057,121 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                             <div className="flex flex-col gap-2 w-full">
                               {normalizeMainImageMode((data.main as any).imageMode) === 'default' ? (
                                 <div className="w-full min-h-[120px] flex items-start gap-3">
-                                  <div className="w-[120px] h-[120px] rounded-lg border border-border bg-[color:var(--surface-20)] overflow-hidden flex items-center justify-center shrink-0">
-                                    {String((data.main as any).presetImage ?? '').trim() ? (
-                                      <img
-                                        src={String((data.main as any).presetImage ?? '').trim()}
-                                        alt="메인 기본 이미지 미리보기"
-                                        className="w-full h-full object-cover"
-                                      />
-                                    ) : (
-                                      <span className="text-[12px] text-on-surface-40 text-center px-2">기본 이미지 없음</span>
-                                    )}
-                                  </div>
-                                  <div className="h-full flex flex-col justify-start gap-2 min-w-0">
-                                    <button
-                                      type="button"
-                                      className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-20 hover:bg-slate-50 whitespace-nowrap leading-none flex-shrink-0 w-fit self-start"
-                                      onClick={() => setMainPresetPickerOpen(true)}
-                                    >
-                                      이미지 고르기
-                                    </button>
-                                  </div>
+                                  {(() => {
+                                    const presetUrl = String((data.main as any).presetImage ?? '').trim();
+                                    const hasPreset = !!presetUrl;
+                                    return (
+                                      <>
+                                        <div className="w-[120px] aspect-[3/4] rounded-lg border border-border bg-[color:var(--surface-20)] overflow-hidden flex items-center justify-center flex-shrink-0">
+                                          {hasPreset ? (
+                                            <img
+                                              src={presetUrl}
+                                              alt="메인 기본 이미지 미리보기"
+                                              className="w-full h-full object-cover"
+                                            />
+                                          ) : (
+                                            <ImageIcon
+                                              className="w-8 h-8 text-[color:var(--on-surface-disabled)]"
+                                              strokeWidth={1.25}
+                                              aria-hidden
+                                            />
+                                          )}
+                                        </div>
+                                        <div className="h-full flex flex-col justify-start gap-2 min-w-0">
+                                          <button
+                                            type="button"
+                                            className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-20 hover:bg-slate-50 whitespace-nowrap leading-none w-fit"
+                                            onClick={() => setMainPresetPickerOpen(true)}
+                                          >
+                                            {hasPreset ? '사진 변경' : '사진 업로드'}
+                                          </button>
+                                          {hasPreset && (
+                                            <>
+                                              <button
+                                                type="button"
+                                                className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-20 hover:bg-slate-50 whitespace-nowrap leading-none w-fit"
+                                                onClick={() => openImageEditor({ kind: 'mainPreset' }, presetUrl)}
+                                              >
+                                                이미지 편집
+                                              </button>
+                                              <button
+                                                type="button"
+                                                className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-30 hover:bg-slate-50 whitespace-nowrap leading-none w-fit"
+                                                onClick={() => {
+                                                  if (presetUrl.startsWith('blob:')) {
+                                                    try {
+                                                      URL.revokeObjectURL(presetUrl);
+                                                    } catch {}
+                                                  }
+                                                  updateData('main.presetImage', '');
+                                                }}
+                                              >
+                                                사진 제거
+                                              </button>
+                                            </>
+                                          )}
+                                        </div>
+                                      </>
+                                    );
+                                  })()}
                                 </div>
                               ) : normalizeMainImageMode((data.main as any).imageMode) === 'single' ? (
-                                <div className="w-full">
-                                  {!!data.main.image ? (
-                                    <div className="relative w-[120px] aspect-[3/4] group">
-                                      <button
-                                        type="button"
-                                        className="w-full h-full rounded-lg border border-transparent bg-white flex items-center justify-center text-3xl text-on-surface-30 bg-center bg-cover bg-clip-border bg-origin-border"
-                                        style={{ backgroundImage: `url(${data.main.image})` }}
-                                        onClick={() => mainImageInputRef.current?.click()}
-                                        aria-label="이미지 추가"
-                                      />
-                                      <div
-                                        className={cn(
-                                          "absolute right-2 top-2 flex flex-col gap-2 transition-opacity",
-                                          isTabletViewport ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-                                        )}
-                                      >
-                                        <button
-                                          type="button"
-                                          className="w-8 h-8 rounded-lg bg-white/95 border border-border shadow-sm flex items-center justify-center text-on-surface-20 hover:bg-white"
-                                          aria-label="이미지 수정"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            openImageEditor({ kind: 'single' }, data.main.image);
-                                          }}
-                                        >
-                                          <Pencil className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="w-8 h-8 rounded-lg bg-white/95 border border-border shadow-sm flex items-center justify-center text-on-surface-20 hover:bg-white"
-                                          aria-label="이미지 삭제"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            if (mainImageObjectUrlRef.current) {
-                                              URL.revokeObjectURL(mainImageObjectUrlRef.current);
-                                              mainImageObjectUrlRef.current = null;
-                                            }
-                                            updateData('main.image', '');
-                                          }}
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      className="w-[100px] min-w-[80px] aspect-[3/4] rounded-lg border bg-white flex items-center justify-center text-3xl text-on-surface-30 bg-center bg-cover bg-clip-border bg-origin-border border-dashed border-border hover:bg-slate-50"
-                                      onClick={() => mainImageInputRef.current?.click()}
-                                      aria-label="이미지 추가"
-                                    >
-                                      +
-                                    </button>
-                                  )}
+                                <div className="w-full min-h-[120px] flex items-start gap-3">
+                                  {(() => {
+                                    const hasMainImage = !!String(data.main.image ?? '').trim();
+                                    return (
+                                      <>
+                                        <div className="w-[120px] aspect-[3/4] rounded-lg border border-border bg-[color:var(--surface-20)] overflow-hidden flex items-center justify-center flex-shrink-0">
+                                          {hasMainImage ? (
+                                            <img
+                                              src={data.main.image}
+                                              alt="메인 사진"
+                                              className="w-full h-full object-cover"
+                                            />
+                                          ) : (
+                                            <ImageIcon
+                                              className="w-8 h-8 text-[color:var(--on-surface-disabled)]"
+                                              strokeWidth={1.25}
+                                              aria-hidden
+                                            />
+                                          )}
+                                        </div>
+                                        <div className="h-full flex flex-col justify-start gap-2 min-w-0">
+                                          <button
+                                            type="button"
+                                            className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-20 hover:bg-slate-50 whitespace-nowrap leading-none w-fit"
+                                            onClick={() => mainImageInputRef.current?.click()}
+                                          >
+                                            {hasMainImage ? '사진 변경' : '사진 업로드'}
+                                          </button>
+                                          {hasMainImage && (
+                                            <>
+                                              <button
+                                                type="button"
+                                                className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-20 hover:bg-slate-50 whitespace-nowrap leading-none w-fit"
+                                                onClick={() => openImageEditor({ kind: 'single' }, data.main.image)}
+                                              >
+                                                이미지 편집
+                                              </button>
+                                              <button
+                                                type="button"
+                                                className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-30 hover:bg-slate-50 whitespace-nowrap leading-none w-fit"
+                                                onClick={() => {
+                                                  if (mainImageObjectUrlRef.current) {
+                                                    URL.revokeObjectURL(mainImageObjectUrlRef.current);
+                                                    mainImageObjectUrlRef.current = null;
+                                                  }
+                                                  updateData('main.image', '');
+                                                }}
+                                              >
+                                                사진 제거
+                                              </button>
+                                            </>
+                                          )}
+                                        </div>
+                                      </>
+                                    );
+                                  })()}
                                   <input
                                     ref={mainImageInputRef}
                                     type="file"
@@ -6699,7 +6773,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                                           className="h-9 px-3 rounded-lg border border-border bg-white text-[13px] text-on-surface-10 inline-flex items-center cursor-pointer hover:bg-slate-50 w-fit max-w-full whitespace-nowrap leading-none flex-shrink-0"
                                           onClick={() => openImageEditor({ kind: 'shareThumbnail' }, data.share.thumbnail)}
                                         >
-                                          수정
+                                          편집
                                         </button>
                                         <button
                                           type="button"
@@ -7259,6 +7333,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                           data={data}
                           updateData={updateData}
                           isEnabled={isSectionEnabled('intro')}
+                          onEditImage={(role, src) => openImageEditor({ kind: 'intro', role }, src)}
                         />
                       )}
 
