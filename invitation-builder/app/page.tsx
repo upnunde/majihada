@@ -41,7 +41,7 @@ export default function HomePage() {
           <div className="absolute inset-0 bg-black/50" aria-hidden="true" />
           <div className="relative z-10 mx-auto w-full max-w-7xl px-6 py-24 text-center text-white md:py-32">
             <p className="text-sm font-semibold text-white/80">dearhour · 모바일 초대장 서비스</p>
-            <h1 className="mt-4 text-4xl font-extrabold tracking-tight leading-[80px] md:text-6xl md:leading-[80px]">
+            <h1 className="mt-4 text-4xl font-extrabold tracking-tight leading-relaxed md:text-6xl md:leading-relaxed">
               소중한 날을 특별하게,
               <br />
               모바일 초대장을 쉽고 빠르게

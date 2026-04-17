@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Palette, Music, Image as ImageIcon, Users, UserRound, MessageSquare, MessageCircle, Phone, CalendarHeart, MapPin, Bell, Images, Wallet, BookOpen, Youtube, Share2, Shield, CheckCircle2, GripVertical, Play, Pause, VolumeX, Volume2, X, ChevronDown, ChevronLeft, ChevronRight, MoreVertical, Pencil, Trash2, RotateCw, RefreshCcw, Move, ArrowUpDown, ClipboardCheck, Calendar, Settings, Bus, Train, Car, ParkingCircle, Route, AlertCircle } from 'lucide-react';
@@ -812,131 +812,18 @@ import GuestPhotoUploadForm from "@/components/GuestPhotoUploadForm";
 import AddressSearchDialog from "@/components/AddressSearchDialog";
 import ParticleCanvasOverlay from "@/components/ParticleCanvasOverlay";
 
-declare global {
-  interface Window {
-    naver?: any;
-  }
-}
-
-function NaverMapEmbed({
-  lat,
-  lon,
-  className,
-  onAuthError,
-  onMapReady,
-}: {
-  lat: number;
-  lon: number;
-  className?: string;
-  onAuthError?: () => void;
-  onMapReady?: () => void;
-}) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [ready, setReady] = useState(false);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    const clientId = process.env.NEXT_PUBLIC_NAVER_MAPS_CLIENT_ID;
-    if (!clientId) return;
-    setFailed(false);
-    setReady(false);
-
-    if (window.naver?.maps) {
-      setReady(true);
-      return;
-    }
-
-    const scriptId = "naver-maps-sdk";
-    const existing = document.getElementById(scriptId) as HTMLScriptElement | null;
-    if (existing) {
-      const onLoad = () => {
-        if (window.naver?.maps) {
-          setReady(true);
-          return;
-        }
-        setFailed(true);
-        onAuthError?.();
-      };
-      existing.addEventListener("load", onLoad, { once: true });
-      return;
-    }
-
-    const s = document.createElement("script");
-    s.id = scriptId;
-    s.async = true;
-    s.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${encodeURIComponent(clientId)}`;
-    s.addEventListener("load", () => {
-      if (window.naver?.maps) {
-        setReady(true);
-        return;
-      }
-      setFailed(true);
-      onAuthError?.();
-    }, { once: true });
-    s.addEventListener("error", () => {
-      setFailed(true);
-      onAuthError?.();
-    }, { once: true });
-    document.head.appendChild(s);
-  }, [onAuthError]);
-
-  useEffect(() => {
-    if (!ready) return;
-    if (!containerRef.current) return;
-    if (!window.naver?.maps) return;
-    try {
-      const center = new window.naver.maps.LatLng(lat, lon);
-      const map = new window.naver.maps.Map(containerRef.current, {
-        center,
-        zoom: 16,
-        mapTypeId: window.naver.maps.MapTypeId.NORMAL,
-        draggable: false,
-        scrollWheel: false,
-        keyboardShortcuts: false,
-        scaleControl: false,
-        logoControl: false,
-        mapDataControl: false,
-        zoomControl: false,
-      });
-      // 일부 SDK 버전/환경에서는 옵션만으로는 제스처 드래그가 남는 경우가 있어,
-      // 안전하게 한 번 더 비활성화합니다.
-      try {
-        (map as any).setOptions?.({ draggable: false, scrollWheel: false, keyboardShortcuts: false });
-      } catch {
-        // ignore
-      }
-      if (containerRef.current) {
-        containerRef.current.style.touchAction = "none";
-        containerRef.current.style.cursor = "default";
-      }
-      new window.naver.maps.Marker({ position: center, map });
-
-      // SDK가 "인증 실패" 텍스트를 컨테이너에 렌더링하는 경우를 감지해 폴백 처리한다.
-      window.setTimeout(() => {
-        const text = containerRef.current?.textContent ?? "";
-        if (text.includes("Open API 인증이 실패")) {
-          setFailed(true);
-          onAuthError?.();
-          return;
-        }
-        onMapReady?.();
-      }, 0);
-    } catch {
-      setFailed(true);
-      onAuthError?.();
-    }
-
-    return () => {
-      // SDK가 제공하는 공식 destroy API가 명확치 않아, 언마운트 시 참조만 끊어줌
-      // (컨테이너 DOM이 제거되면 내부 리스너도 함께 해제됨)
-    };
-  }, [ready, lat, lon, onAuthError, onMapReady]);
-
-  const hasKey = Boolean(process.env.NEXT_PUBLIC_NAVER_MAPS_CLIENT_ID);
-
-  if (!hasKey || failed) return null;
-
-  return <div ref={containerRef} className={className} />;
+/** 네이버 정적 지도 API 실패 시 안내 (미리보기는 서버 `/api/naver-map-preview` 사용) */
+function NaverMapPreviewFallbackHint({ visible }: { visible: boolean }) {
+  if (!visible) return null;
+  return (
+    <p className="mx-auto mt-2 max-w-[340px] rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-left text-[11px] leading-snug text-amber-950">
+      <span className="font-semibold">네이버 지도</span> 미리보기: NCP Maps → Application에서 <span className="font-semibold">Static Map</span> 을 켜고,{" "}
+      <code className="rounded bg-white/80 px-1 py-0.5 text-[10px]">.env.local</code> 에{" "}
+      <span className="font-semibold">NAVER_MAPS_CLIENT_SECRET</span> 과 Client ID(
+      <span className="font-semibold">NEXT_PUBLIC_NAVER_MAPS_CLIENT_ID</span>)를 넣은 뒤 <span className="font-semibold">개발 서버를 재시작</span>
+      하세요. (브라우저 JS SDK 대신 서버에서 정적 지도를 받아 표시합니다.)
+    </p>
+  );
 }
 
 function Input(props: React.ComponentProps<typeof RawInput>) {
@@ -2557,7 +2444,10 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
     setNaverPreviewFailed(false);
   }, [locationPreviewCoords?.lat, locationPreviewCoords?.lon]);
 
-  useEffect(() => {
+  // 스크롤 연출 ON일 때 IntersectionObserver로 섹션 노출을 제어함.
+  // preview 스크롤 루트는 조건부 렌더(모바일: 미리보기 탭)·ref 부착 타이밍 이후에만 존재하므로
+  // useLayoutEffect + 모바일 패널 의존성으로 observer를 안정적으로 붙인다.
+  useLayoutEffect(() => {
     if (!data.theme.scrollEffect) {
       setPreviewVisibleSections({});
       return;
@@ -2585,7 +2475,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
 
     targets.forEach((el) => observer.observe(el));
     return () => observer.disconnect();
-  }, [data.theme.scrollEffect, data.sectionEnabled, optionalOrder]);
+  }, [data.theme.scrollEffect, data.sectionEnabled, optionalOrder, isTabletViewport, mobilePanel]);
 
   const scrollPreviewToSection = (sectionId: string) => {
     if (sectionId === "hosts" || sectionId === "eventInfo") return;
@@ -3484,21 +3374,14 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
 
     const t = window.setTimeout(async () => {
       try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`,
-          {
-            signal: controller.signal,
-            headers: {
-              'Accept': 'application/json',
-              'Accept-Language': 'ko',
-            },
-          }
-        );
-        if (!res.ok) throw new Error('geocode failed');
-        const json = (await res.json()) as Array<{ lat: string; lon: string }>;
-        const first = json?.[0];
-        const lat = first ? Number(first.lat) : NaN;
-        const lon = first ? Number(first.lon) : NaN;
+        const res = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`, {
+          signal: controller.signal,
+          headers: { Accept: "application/json" },
+        });
+        if (!res.ok) throw new Error("geocode failed");
+        const json = (await res.json()) as { lat?: number; lon?: number };
+        const lat = typeof json.lat === "number" ? json.lat : NaN;
+        const lon = typeof json.lon === "number" ? json.lon : NaN;
         if (!cancelled && Number.isFinite(lat) && Number.isFinite(lon)) {
           setLocationPreviewCoords({ lat, lon });
         }
@@ -4686,23 +4569,22 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                   <div className="w-full aspect-[16/10] relative">
                     {locationPreviewCoords ? (
                       <>
-                        <iframe
-                          title="지도 미리보기"
-                          className={cn(
-                            "absolute inset-0 w-full h-full border-0 z-0",
-                            naverPreviewFailed ? "opacity-100" : "opacity-100",
-                          )}
-                          loading="lazy"
-                          referrerPolicy="no-referrer-when-downgrade"
-                          src={buildOsmEmbedUrl(locationPreviewCoords.lat, locationPreviewCoords.lon)}
-                        />
-                        {process.env.NEXT_PUBLIC_NAVER_MAPS_CLIENT_ID && !naverPreviewFailed && (
-                          <NaverMapEmbed
-                            lat={locationPreviewCoords.lat}
-                            lon={locationPreviewCoords.lon}
-                            className="absolute inset-0 z-[1] w-full h-full"
-                            onAuthError={() => setNaverPreviewFailed(true)}
-                            onMapReady={() => setNaverPreviewFailed(false)}
+                        {!naverPreviewFailed && (
+                          <img
+                            key={`${locationPreviewCoords.lat}-${locationPreviewCoords.lon}`}
+                            alt=""
+                            src={`/api/naver-map-preview?lat=${encodeURIComponent(String(locationPreviewCoords.lat))}&lon=${encodeURIComponent(String(locationPreviewCoords.lon))}&w=800&h=500`}
+                            className="absolute inset-0 z-[1] h-full w-full object-cover"
+                            onError={() => setNaverPreviewFailed(true)}
+                          />
+                        )}
+                        {naverPreviewFailed && (
+                          <iframe
+                            title="지도 미리보기"
+                            className="absolute inset-0 z-0 h-full w-full border-0"
+                            loading="lazy"
+                            referrerPolicy="no-referrer-when-downgrade"
+                            src={buildOsmEmbedUrl(locationPreviewCoords.lat, locationPreviewCoords.lon)}
                           />
                         )}
                       </>
@@ -4726,6 +4608,8 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
                     {/* 지도 우측 상단 줌 컨트롤(+/-) 비노출 처리 */}
                     <div className="absolute right-2 top-2 z-20 h-20 w-10 rounded-md bg-[color:var(--surface-20)]" aria-hidden />
                   </div>
+
+                  <NaverMapPreviewFallbackHint visible={naverPreviewFailed} />
 
                   {/* 하단 앱 전송 바 (캡처 스타일) */}
                   {appLinks && (
@@ -9011,7 +8895,7 @@ export default function BuilderPageClient({ initialParams, initialSearchParams }
             <div
               ref={previewFrameRef}
               className={cn(
-                "preview-font-floor w-full bg-white flex flex-col items-stretch text-center overflow-hidden relative",
+                "preview-font-floor min-w-80 w-full bg-white flex flex-col items-stretch text-center overflow-hidden relative",
                 isTabletViewport ? "h-full border-0 rounded-none" : "border border-border rounded-lg",
               )}
               style={
